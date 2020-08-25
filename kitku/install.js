@@ -52,21 +52,24 @@ function formSubmit(e, page) {
 	fd.append('page', page);
 
 	const xhttp = new XMLHttpRequest();
-		xhttp.open('POST', homeUrl+'kitku/install.php?formdata=true', true);
+		xhttp.open('POST', homeUrl+'install.php?formdata=true', true);
 		xhttp.send(fd);
 
 	xhttp.onreadystatechange = function() {
             if (this.readyState == 4 && this.status == 200){
-            	if (this.responseText === 'success') {
+            	console.log(this.responseText);
+            	if (this.responseText.includes('success')) {
             		activePage++;
 					paginate(activePage);	
             	} else {
-            		if (this.responseText.includes('No such host is known')) {
+            		if (this.responseText.includes('noHost')) {
         				resetPage('Host not found. Check your server name and try again.');
-                	} else if (this.responseText.includes('Access denied')) {
+                	} else if (this.responseText.includes('badCred')) {
                 		resetPage('Bad credentials. Confirm your username and password are correct.');
-                	} else if (this.responseText.includes('Server Error')){
+                	} else if (this.responseText.includes('serveerr')){
                 		resetPage('Server Error. Please try again.');
+                	} else if (this.responseText.includes('createDBFail')){
+                		resetPage("Can't create database. Check your SQL database priveledges.");
                 	} else {
                 		resetPage('There was an unknown error, please contact the Kitku team.');
                 	}
@@ -80,6 +83,7 @@ function formSubmit(e, page) {
 		backButton.classList.remove('hidden');
 		backButton.addEventListener('click', function _listener() {
 			paginate(activePage);
+			pageMessage.textContent = '';
 			backButton.classList.add('hidden');
 			backButton.removeEventListener("click", _listener, true);
 		}, true);

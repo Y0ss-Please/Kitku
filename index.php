@@ -1,3 +1,3 @@
 <?php
-	include 'kitku/init.php';
+	header('Location: kitku/kitku.php');
 ?>

@@ -12,6 +12,14 @@ h1 {
 	margin: 0;
 }
 
+a {
+	color: #d0d0d0;
+}
+
+a:visited {
+	color: #d0d0d0;
+}
+
 .main {
 	margin: 10vh auto;
 	max-width: 100%;
