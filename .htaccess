@@ -1,0 +1,2 @@
+RewriteEngine on
+RewriteRule ^admin? index.php?page=admin
