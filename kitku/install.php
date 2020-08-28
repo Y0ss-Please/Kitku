@@ -2,8 +2,11 @@
 
 require_once 'kitku.php';
 
-if (empty($kitku)) {
-	$kitku = new Kitku();
+$installer = new KitkuInstaller;
+
+if ($installer->installed === true) {
+	header("Location: ".$installer->home['url']);
+	exit();
 }
 
 if (isset($_GET['formdata']) && $_GET['formdata'] == true) {
@@ -17,14 +20,14 @@ if (isset($_GET['formdata']) && $_GET['formdata'] == true) {
 				'database' => 'kitku_'.random_string(5)
 			];
 
-			if ($kitku->open_conn($dbInfo['server'], $dbInfo['username'], $dbInfo['password'])) {
+			if ($installer->open_conn($dbInfo['server'], $dbInfo['username'], $dbInfo['password'])) {
 				$dbCreated = 0;
 				while($dbCreated !== true) {
-					if ($kitku->create_database($dbInfo['database'], false)) {
+					if ($installer->create_database($dbInfo['database'], false)) {
 						$dbCreated = true;
-						$kitku->set_dbInfo($dbInfo);
-						$kitku->installed = 1;
-						if ($kitku->set_config()) {
+						$installer->set_dbInfo($dbInfo);
+						$installer->installed = 1;
+						if ($installer->set_config()) {
 							exit('success');
 						} else {
 							exit('serveErr');
@@ -38,7 +41,7 @@ if (isset($_GET['formdata']) && $_GET['formdata'] == true) {
 					}
 				}
 			} else {
-				exit($kitku->dbError);
+				exit($installer->dbError);
 			}
 			break;
 
@@ -48,16 +51,30 @@ if (isset($_GET['formdata']) && $_GET['formdata'] == true) {
 				'email' => 'VARCHAR(30)',
 				'password' => 'VARCHAR(255) NOT NULL'
 			];
-			$articlesColumns = [
+			$postsColumns = [
 				'title' => 'VARCHAR(80) NOT NULL',
+				'author' => 'VARCHAR(255)',
+				'category' => 'VARCHAR(30) NOT NULL DEFAULT none',
+				'date' => 'DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP',
 				'tags' => 'VARCHAR(255)',
-				'views' => 'INT(6) NOT NULL',
+				'views' => 'INT(12) NOT NULL DEFAULT 0',
 				'content' => 'LONGTEXT NOT NULL'
 			];
-			if (!$kitku->create_table('users', $usersColumns)) {
+			$pagesColumns = [
+				'title' => 'VARCHAR(80) NOT NULL',
+				'parent' => 'VARCHAR(80)',
+				'views' => 'INT(12) NOT NULL DEFAULT 0',
+				'content' => 'LONGTEXT NOT NULL',
+				'blogPage' => 'BOOLEAN NOT NULL DEFAULT FALSE',
+				'showInMenu' =>'BOOLEAN NOT NULL DEFAULT TRUE'
+			];
+			if (!$installer->create_table('users', $usersColumns)) {
 				exit('serveErr');
 			}
-			if (!$kitku->create_table('articles', $articlesColumns)) {
+			if (!$installer->create_table('posts', $postsColumns)) {
+				exit('serveErr');
+			}
+			if (!$installer->create_table('pages', $pagesColumns)) {
 				exit('serveErr');
 			}
 
@@ -67,18 +84,56 @@ if (isset($_GET['formdata']) && $_GET['formdata'] == true) {
 				'password' => password_hash($_POST['password'], PASSWORD_DEFAULT)
 			];
 
-			if ($kitku->insert('users', $userInfo)) {
-				$kitku->installed = 2;
-				if ($kitku->set_config()) {
+			$defaultPost = [
+				'title' => 'My new Kitku Site!',
+				'author' => 'Kitku',
+				'category' => '',
+				'date' => time(),
+				'tags' => 'first-post,default',
+				'views' => '',
+				'content' => 'A dove and a fist'
+			];
+			$defaultBlog = [
+				'title' => 'Blog',
+				'parent' => '',
+				'views' => '',
+				'content' => 'The blog page!',
+				'blogPage' => 1,
+				'showInMenu' => 1
+			];
+			$defaultAbout = [
+				'title' => 'About',
+				'parent' => '',
+				'views' => '',
+				'content' => 'This is the about page. <h2>This is an h2 tag</h2>',
+				'blogPage' => 0,
+				'showInMenu' => 1
+			];
+
+			if (!$installer->insert('posts', $defaultPost)) {
+				exit('sqlErr');
+			}
+
+			if (!$installer->insert('pages', $defaultBlog)) {
+				exit('sqlErr');
+			}
+
+			if (!$installer->insert('pages', $defaultAbout)) {
+				exit('sqlErr');
+			}
+
+			if ($installer->insert('users', $userInfo)) {
+				$installer->installed = 2;
+				if ($installer->set_config()) {
 					exit('success');
 				}
 			}
 			exit('serveErr');
 			break;
 		case 2:
-			$kitku->siteName = $_POST['sitename'];
-			$kitku->installed = true;
-			if ($kitku->set_config()) {
+			$installer->siteName = $_POST['sitename'];
+			$installer->installed = true;
+			if ($installer->set_config()) {
 				exit('goHome');
 			}
 			exit('serveErr');
@@ -89,130 +144,31 @@ if (isset($_GET['formdata']) && $_GET['formdata'] == true) {
 <!DOCTYPE html>
 <html>
 <head>
+
 	<meta charset="utf-8">
-	<title>Kitku Install</title>
+	<title>Kitku Installer</title>
 	<meta name="viewport" content="width=device-width, initial-scale=1">
-	<style>
-		* {
-			font-family: "Lucida Console", Courier, monospace;
-		}
-
-		body {
-			margin: 0;
-			width: 100%;
-			background-color: #231f22;
-		}
-
-		h1 {
-			margin: 0;
-		}
-
-		em {
-			color: #008080;
-		}
-
-		a, a:visited{
-			color: #008080;
-		}
-
-		.main {
-			color: #a5a4a7;
-			margin: 10vh auto;
-			max-width: 100%;
-			width: 40rem;
-		}
-
-		.content-container {
-			background-color: #38353a;
-		}
-
-		.form-grid {
-			display: grid;
-			grid-template-columns: auto 1fr;
-			grid-row-gap: 1rem;
-			grid-column-gap: 1rem;
-		}
-
-		.form-grid>label {
-			text-align: right;
-		}
-
-		.content-header {
-			background-color: #130f15;
-			text-align: center;
-			padding: 1rem;
-		}
-
-		.content-body {
-			padding: 1rem 1rem;
-		}
-
-		.content-footer {
-			position: relative;
-			background-color: #130f15;
-			height: 2rem;
-			line-height: 2rem;
-			padding: 1rem;
-		}
-
-		input[type="text"], input[type="email"], input[type="password"] {
-			background-color: #a5a4a7;
-			border: none;
-		}
-
-		button, input[type="submit"], input[type="reset"] {
-			background: none;
-			color: inherit;
-			border: none;
-			padding: 0;
-			font: inherit;
-			cursor: pointer;
-			outline: inherit;
-		}
-
-		.button {
-			background-color: #008080;
-			border: 1px solid #273031;
-			border-radius: 2px;
-			padding: 0 1rem;
-			margin: 0 1rem;
-			cursor: pointer;
-		}
-
-		.button:hover {
-			background-color: #1ab3b3;
-		}
-
-		.button:active {
-			background-color: #135050;
-		}
-
-		.right {
-			position: absolute;
-			right: 0;
-		}
-
-		.left {
-			position: absolute;
-			left: 0;
-		}
-
-		.hidden {
-			display: none;
-		}
-	</style>
+	<link rel="stylesheet" type="text/css" href="<?= $installer->home['installUrl'].'res/normalize.css'?>">
+	<link rel="stylesheet" type="text/css" href="<?= $installer->home['installUrl'].'res/default-style.css'?>">
+	<link rel="icon" type="image/png" href="<?= $installer->home['installUrl'].'res/images/favicon.png'?>"/>
 </head>
 <body>
-	<div class="main">
+	<div id="installer">
+
 		<div class="content-container">
+
 			<div class="content-header">
+				<img id="kitku-logo" width="64px" height="64px" src="<?= $installer->home['installUrl'].'res/images/logo.png'?>" />
 				<h1>Welcome to Kitku!</h1>
 				<em>- Simple Content Management -</em>
 			</div>
+
 			<div class="content-body">
-				<div class="paginate-page page0 hidden">
-					<p>Thanks for choosing Kitku! If you need any help with setup, please click <a href="https://www.google.com">here.</a></p>
+
+				<div class="paginate-page  page0  hidden">
+					<p>If you need any help with setup, please click <a href="https://www.google.com">here.</a></p>
 					<p>First, let's connect to your database.</p>
+
 					<form id="page0-form" method="post" onsubmit="return formSubmit(event, activePage)">
 						<div class="form-grid">
 							<label for="database-servername">Servername:</label>
@@ -224,10 +180,12 @@ if (isset($_GET['formdata']) && $_GET['formdata'] == true) {
 							<input type="submit" id="page0-form-submit" class="hidden">
 						</div>
 					</form>
+
 				</div>
 
-				<div class="paginate-page page1 hidden">
+				<div class="paginate-page  page1  hidden">
 					<p>Now we need to set up an admin user. This will be used to login and make changes to your website.</p>
+
 					<form id="page1-form" onsubmit="return formSubmit(event, activePage)">
 						<div class="form-grid">
 							<label for="username">Username:</label>
@@ -239,10 +197,12 @@ if (isset($_GET['formdata']) && $_GET['formdata'] == true) {
 							<input type="submit" id="page1-form-submit" class="hidden">
 						</div>
 					</form>
+
 				</div>
 
-				<div class="paginate-page page2 hidden">
+				<div class="paginate-page  page2  hidden">
 					<p>Finally, what is your website called?</p>
+
 					<form id="page2-form" onsubmit="return formSubmit(event, activePage)">
 						<div class="form-grid">
 							<label for="sitename">Site name:</label>
@@ -250,19 +210,22 @@ if (isset($_GET['formdata']) && $_GET['formdata'] == true) {
 							<input type="submit" id="page2-form-submit" class="hidden">
 						</div>
 					</form>
+
 				</div>
 
-					<p class="hidden" id="message">Working on it</p>
+				<p class="hidden" id="message">Working on it</p>
 
 			</div>
 
 			<div class="content-footer">
-				<label for="page0-form-submit" class="button paginate-button page0 right hidden" tabindex="0">Next</label>
-				<label for="page1-form-submit" class="button paginate-button page1 right hidden" tabindex="0">Next</label>
-				<label for="page2-form-submit" class="button paginate-button page2 right hidden" tabindex="0">Complete</label>
-				<button id="back-button" class="button left hidden" tabindex="0">Back</button>
+				<label for="page0-form-submit" class="button  right  hidden [ paginate-button page0 ]" tabindex="0">Next</label>
+				<label for="page1-form-submit" class="button  right  hidden [ paginate-button page1 ] " tabindex="0">Next</label>
+				<label for="page2-form-submit" class="button  right  hidden  [ paginate-button page2 ]" tabindex="0">Complete</label>
+				<button id="back-button" class="button  left  hidden" tabindex="0">Back</button>
 			</div>
+
 		</div>
+
 	</div>
 
 	<script>
@@ -275,10 +238,10 @@ if (isset($_GET['formdata']) && $_GET['formdata'] == true) {
 		paginateCount = paginatePages.length,
 		pageMessage = document.getElementById('message');
 
-		const installUrl = '<?= $kitku->home['installUrl'] ?>';
-		const homeUrl = '<?= $kitku->home['url'] ?>';
+		const installUrl = '<?= $installer->home['installUrl'] ?>';
+		const homeUrl = '<?= $installer->home['url'] ?>';
 
-		let activePage = <?= $kitku->installed; ?>;
+		let activePage = <?= $installer->installed; ?>;
 
 		function paginate(num) {
 
@@ -364,7 +327,6 @@ if (isset($_GET['formdata']) && $_GET['formdata'] == true) {
 
 		function init() {
 			paginate(activePage);
-			containerBody.style.minHeight = containerBody.offsetHeight+'px';
 			document.addEventListener('keydown', (ele) => {
 				if (ele.keyCode == 13) {
 					buttons.forEach( (e)=> {

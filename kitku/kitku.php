@@ -1,37 +1,112 @@
 <?php
 
 	class Kitku {
+		public $version = "0.0.0";
 		public $conn;
 		public $dbError;
 		public $siteName;
-		private $dbInfo = [];
-		private $currentPath;
+		protected $dbInfo = [];
+		protected $currentPath;
+		protected $hasConfig;
 
 		function __construct() {
 			$this->currentPath = __DIR__.'/';
-			$this->get_config();
+			$this->hasConfig = ($this->get_config() ? true : false);
 			if (!empty($this->dbInfo)) {
 				$this->open_conn($this->dbInfo['server'], $this->dbInfo['username'], $this->dbInfo['password'], (!empty($this->dbInfo['database'])) ? $this->dbInfo['database'] : '');
 			}
 		}
 
-		private function get_config() {
+		protected function get_config() {
 			if (file_exists($this->currentPath.'config.json')) {
 				$vars = json_decode(file_get_contents($this->currentPath.'config.json'), true);
 				foreach ($vars as $key => $value) {
 					$this->$key = $value;
 				}
 				return true;
+			}
+			return false;
+		}
+		
+		/* -- DATABASE FUNCTIONS --*/
+		public function close_conn() {
+			if ($this->conn) {
+				return ($this->conn->close()) ? true : false;
+			}
+		}
+
+		public function open_conn($server = false, $user = false, $password = false, $database = false) {
+			$this->close_conn();
+
+			$this->conn = new mysqli(
+				($server) ? $server : $this->dbInfo['server'], 
+				($user) ? $user : $this->dbInfo['user'], 
+				($password) ? $password : (!empty($this->dbInfo['password']) ? $this->dbInfo['password'] : ''), 
+				($database) ? $database : (!empty($this->dbInfo['database']) ? $this->dbInfo['database'] : '')
+			);
+
+			if ($this->conn->connect_error) {
+				$this->dbError = $this->parse_errors($this->conn->connect_error);
+				return false;
 			} else {
+				$this->dbError = false;
+				return true;
+			}
+		}
+
+		public function get($table, $select, $where = false) {
+			$result = $this->conn->query("SELECT $select FROM $table".($where ? $where : ''));
+			return mysqli_fetch_all($result, MYSQLI_ASSOC);		
+		}
+
+		public function insert($table, $objects) {
+			$keys = '';
+			$values = [];
+			$binder = '';
+			$placeholder = '';
+			foreach ($objects as $key => $value) {
+				$keys = $keys.$key.', ';
+				array_push($values, $value);
+				$binder = $binder.(is_numeric($value) ? (is_float($value)) ? 'd' : 'i' : 's');
+				$placeholder = $placeholder.'?, ';
+			}
+			$keys = trim($keys, ', ');
+			$placeholder = trim($placeholder, ', ');
+			$command = "INSERT INTO $table ( $keys ) VALUES ( $placeholder )";
+			$stmt = $this->conn->prepare($command);
+			$stmt->bind_param($binder, ...$values);
+			if ($stmt->execute()) {
+				return true;
+			} else {
+				$this->dbError = $this->conn->error;
+			}
+		}
+
+		protected function parse_errors($error) {
+			if (strpos($error, 'No such host') !== false) {
+				return 'noHost';
+			} else if (strpos($error, 'Access denied') !== false) {
+				return 'badCred';
+			} else if (strpos($error, 'Unknown database') !== false) {
+				return 'noDB';
+			} else {
+				//return $error; For testing purposes. Will echo unparsed error to console!
+				return 'other';
+			}
+		}
+	}
+
+	class KitkuInstaller extends Kitku {
+		function __construct() {
+			parent::__construct();
+			if (!$this->hasConfig) {
 				$this->siteName = 'NewKitkuSite';
 				$this->installed = 0;
 				$this->set_home();
 				$this->set_config();
-				return false;
 			}
 		}
 
-		/* -- INIT FUNCTIONS -- */
 		public function set_config() {
 			$config = [
 				'siteName' => $this->siteName,
@@ -58,34 +133,8 @@
 			];
 		}
 
-		/* -- DATABASE FUNCTIONS --*/
 		public function set_dbInfo($dbInfo) {
 			$this->dbInfo = $dbInfo;
-		}
-
-		public function close_conn() {
-			if ($this->conn) {
-				return ($this->conn->close()) ? true : false;
-			}
-		}
-
-		public function open_conn($server = false, $user = false, $password = false, $database = false) {
-			$this->close_conn();
-
-			$this->conn = new mysqli(
-				($server) ? $server : $this->dbInfo['server'], 
-				($user) ? $user : $this->dbInfo['user'], 
-				($password) ? $password : (!empty($this->dbInfo['password']) ? $this->dbInfo['password'] : ''), 
-				($database) ? $database : (!empty($this->dbInfo['database']) ? $this->dbInfo['database'] : '')
-			);
-
-			if ($this->conn->connect_error) {
-				$this->dbError = $this->parse_errors($this->conn->connect_error);
-				return false;
-			} else {
-				$this->dbError = false;
-				return true;
-			}
 		}
 
 		public function create_database($name, $connectAfterCreate = false) {
@@ -98,10 +147,6 @@
 				return $result;
 			}
 			return $result;
-		}
-
-		public function drop_database() {
-			return ($this->conn->query("DROP DATABASE ".$this->dbInfo['database'])) ? true : false;
 		}
 
 		public function create_table($name, $columns = false) {
@@ -127,29 +172,6 @@
 			return true;
 		}
 
-		public function insert($table, $objects) {
-			$keys = '';
-			$values = [];
-			$binder = '';
-			$placeholder = '';
-			foreach ($objects as $key => $value) {
-				$keys = $keys.$key.', ';
-				array_push($values, $value);
-				$binder = $binder.(is_numeric($value) ? (is_float($value)) ? 'd' : 'i' : 's');
-				$placeholder = $placeholder.'?, ';
-			}
-			$keys = trim($keys, ', ');
-			$placeholder = trim($placeholder, ', ');
-			$command = "INSERT INTO $table ( $keys ) VALUES ( $placeholder )";
-			$stmt = $this->conn->prepare($command);
-			$stmt->bind_param($binder, ...$values);
-			if ($stmt->execute()) {
-				return true;
-			} else {
-				$this->dbError = $this->conn->error;
-			}
-		}
-
 		private function try_command($try) {
 			if ($this->conn->query($try)) {
 				return true;
@@ -158,17 +180,14 @@
 				return false;
 			}
 		}
+	}
 
-		private function parse_errors($error) {
-			if (strpos($error, 'No such host') !== false) {
-				return 'noHost';
-			} else if (strpos($error, 'Access denied') !== false) {
-				return 'badCred';
-			} else if (strpos($error, 'Unknown database') !== false) {
-				return 'noDB';
-			} else {
-				//return $error; For testing purposes. Will echo unparsed error to console!
-				return 'other';
+	class Auth extends Kitku {
+		function __construct(...$args) {
+			foreach ($args as $key0 => $values) {
+				foreach ($values as $key1 => $value) {
+					$this->$key1 = $value;
+				}
 			}
 		}
 	}
