@@ -46,7 +46,8 @@ hr {
 
 /* -- Page Structure -- */
 #installer {
-	margin: 10vh auto;
+	margin: 0 auto;
+	padding-top: 10vh;
 	max-width: 100%;
 	width: 40rem;
 }
@@ -159,6 +160,7 @@ table td {
 	border-right: 3px solid var(--grey-1);
 	text-align: center;
 	font-family: "Trebuchet MS", Helvetica, sans-serif;
+	font-weight: bold;
 	padding: 1rem;
 }
 

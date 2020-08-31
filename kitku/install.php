@@ -2,9 +2,98 @@
 
 require_once 'kitku.php';
 
+class KitkuInstaller extends Kitku {
+	function __construct() {
+		parent::__construct();
+		if (!$this->get_config()) {
+			$this->set_home();
+			$defaultConfig = [
+				'siteName' => 'NewKitkuSite',
+				'installed' => 0,
+				'dbInfo' => '',
+				'home' => $this->home,
+				'configIgnores' => ['conn', 'dbError', 'currentPath'], // Object variables NOT stored in config.json
+				'buildTableIgnores' => ['id', 'content'], // Columns ignored by build_table() in admin javascript
+				'buildTableToggles' => ['blogPage', 'showInMenu'] // Columns displayed as a toggle by build_table() in admin javascript
+			];
+			$this->set_config(true, $defaultConfig);
+		}
+	}
+
+	function __destruct() {
+		parent::__destruct();
+	}
+
+	private function set_home() {
+		$filename = [];
+		$regex = "([^\\\/]+$)"; // Match last backslash or forward slash.
+		preg_match($regex, $_SERVER['SCRIPT_FILENAME'], $filename);
+		$url = $_SERVER['REQUEST_SCHEME'].'://'.$_SERVER['SERVER_NAME'].str_replace($filename[0], '', $_SERVER['PHP_SELF']);
+		$installFolder = [];
+		preg_match($regex, substr($this->currentPath, 0, -1), $installFolder);
+		$this->home = [
+			'url' => $url,
+			'installUrl' => $url.$installFolder[0].'/',
+			'server' => str_replace($filename[0], '', $_SERVER['SCRIPT_FILENAME']),
+			'installServer' => $this->currentPath
+		];
+	}
+
+	public function set_dbInfo($dbInfo) {
+		$this->dbInfo = $dbInfo;
+	}
+
+	public function create_database($name, $connectAfterCreate = false) {
+		try {
+			$this->conn->exec("CREATE DATABASE $name");
+			if ($connectAfterCreate) {
+				$this->dbInfo['database'] = $name;
+				$this->close_conn();
+				$this->open_conn();
+			}
+			return true;
+		} catch (\PDOException $e) {
+			$this->parse_errors($e->getMessage());
+			return false;
+		}
+	}
+
+	public function create_table($name, $columns = false) {
+		$command = "CREATE TABLE $name(id INT(6) PRIMARY KEY AUTO_INCREMENT)";
+		if (!$this->try_command($command)) { 
+			return false; 
+		}
+		if ($columns) {
+			if (!$this->alter_table($name, $columns)){
+				return false;
+			}
+		}
+		return true;
+	}
+
+	public function alter_table($name, $columns) {
+		foreach ($columns as $colName => $type) {
+			$command = "ALTER TABLE $name ADD $colName $type";
+			if (!$this->try_command($command)) { 
+				return false; 
+			}
+		}
+		return true;
+	}
+
+	private function try_command($try) {
+		if ($this->conn->query($try)) {
+			return true;
+		} else {
+			$this->parse_errors($this->conn->errorInfo());
+			return false;
+		}
+	}
+}
+
 $installer = new KitkuInstaller;
 
-if ($installer->installed === true) {
+if (isset($installer->installed) && $installer->installed === true) {
 	header("Location: ".$installer->home['url']);
 	exit();
 }
@@ -12,7 +101,7 @@ if ($installer->installed === true) {
 if (isset($_GET['formdata']) && $_GET['formdata'] == true) {
 	switch ($_POST['page']) {
 		case 0:
-			// Check if user provided data allows for server connection.
+		// Check if user provided data allows for server connection.
 			$dbInfo = [
 				'server' => $_POST['database-servername'], 
 				'username' => $_POST['database-username'], 
@@ -46,6 +135,7 @@ if (isset($_GET['formdata']) && $_GET['formdata'] == true) {
 			break;
 
 		case 1:
+		// Build basic database structure
 			$usersColumns = [
 				'username' => 'VARCHAR(30) NOT NULL',
 				'email' => 'VARCHAR(30)',
@@ -54,11 +144,11 @@ if (isset($_GET['formdata']) && $_GET['formdata'] == true) {
 			$postsColumns = [
 				'title' => 'VARCHAR(80) NOT NULL',
 				'author' => 'VARCHAR(255)',
-				'category' => 'VARCHAR(30) NOT NULL DEFAULT none',
-				'date' => 'DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP',
+				'category' => "VARCHAR(30) DEFAULT 'uncategorized' NOT NULL",
+				'date' => 'INT(12) DEFAULT UNIX_TIMESTAMP() NOT NULL',
 				'tags' => 'VARCHAR(255)',
-				'views' => 'INT(12) NOT NULL DEFAULT 0',
-				'content' => 'LONGTEXT NOT NULL'
+				'views' => 'INT(12) DEFAULT 0 NOT NULL',
+				'content' => 'LONGTEXT'
 			];
 			$pagesColumns = [
 				'title' => 'VARCHAR(80) NOT NULL',
@@ -69,13 +159,13 @@ if (isset($_GET['formdata']) && $_GET['formdata'] == true) {
 				'showInMenu' =>'BOOLEAN NOT NULL DEFAULT TRUE'
 			];
 			if (!$installer->create_table('users', $usersColumns)) {
-				exit('serveErr');
+				exit('serveErr-1');
 			}
 			if (!$installer->create_table('posts', $postsColumns)) {
-				exit('serveErr');
+				exit('serveErr-2');
 			}
 			if (!$installer->create_table('pages', $pagesColumns)) {
-				exit('serveErr');
+				exit('serveErr-3');
 			}
 
 			$userInfo = [
@@ -83,11 +173,11 @@ if (isset($_GET['formdata']) && $_GET['formdata'] == true) {
 				'email' => $_POST['email'],
 				'password' => password_hash($_POST['password'], PASSWORD_DEFAULT)
 			];
-
+			// Should make these defaults more professional looking...
 			$defaultPost = [
 				'title' => 'My new Kitku Site!',
 				'author' => 'Kitku',
-				'category' => '',
+				'category' => 'uncategorized',
 				'date' => time(),
 				'tags' => 'first-post,default',
 				'views' => '',
@@ -111,15 +201,16 @@ if (isset($_GET['formdata']) && $_GET['formdata'] == true) {
 			];
 
 			if (!$installer->insert('posts', $defaultPost)) {
-				exit('sqlErr');
+				echo $installer->dbError;
+				exit('sqlErr-1');
 			}
 
 			if (!$installer->insert('pages', $defaultBlog)) {
-				exit('sqlErr');
+				exit('sqlErr-2');
 			}
 
 			if (!$installer->insert('pages', $defaultAbout)) {
-				exit('sqlErr');
+				exit('sqlErr-3');
 			}
 
 			if ($installer->insert('users', $userInfo)) {
@@ -128,9 +219,10 @@ if (isset($_GET['formdata']) && $_GET['formdata'] == true) {
 					exit('success');
 				}
 			}
-			exit('serveErr');
+			exit('serveErr-0');
 			break;
 		case 2:
+		// Get the site name and redirect
 			$installer->siteName = $_POST['sitename'];
 			$installer->installed = true;
 			if ($installer->set_config()) {
@@ -241,7 +333,7 @@ if (isset($_GET['formdata']) && $_GET['formdata'] == true) {
 		const installUrl = '<?= $installer->home['installUrl'] ?>';
 		const homeUrl = '<?= $installer->home['url'] ?>';
 
-		let activePage = <?= $installer->installed; ?>;
+		let activePage = <?= (isset($installer->installed) ? $installer->installed : 0); ?>;
 
 		function paginate(num) {
 
@@ -290,7 +382,7 @@ if (isset($_GET['formdata']) && $_GET['formdata'] == true) {
 
 			xhttp.onreadystatechange = function() {
 		            if (this.readyState == 4 && this.status == 200){
-		            	clearInterval(interval);
+						clearInterval(interval);
 		            	if (this.responseText.includes('success')) {
 		            		activePage++;
 							paginate(activePage);	
@@ -304,7 +396,7 @@ if (isset($_GET['formdata']) && $_GET['formdata'] == true) {
 		                	} else if (this.responseText.includes('serveErr')){
 		                		resetPage('Server Error. Please try again.');
 		                	} else if (this.responseText.includes('createDBFail')){
-		                		resetPage("Can't create database. Check your SQL database priveledges.");
+		                		resetPage("Can't create database. Check your database priveledges.");
 		                	} else {
 		                		resetPage('There was an unknown error, please contact the Kitku team.');
 		                	}
@@ -328,6 +420,7 @@ if (isset($_GET['formdata']) && $_GET['formdata'] == true) {
 		function init() {
 			paginate(activePage);
 			document.addEventListener('keydown', (ele) => {
+			// Enter key progresses page
 				if (ele.keyCode == 13) {
 					buttons.forEach( (e)=> {
 						if (!e.classList.contains('hidden')) {
