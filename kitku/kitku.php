@@ -88,38 +88,49 @@ class Kitku {
 		return true;
 	}
 
-	public function select($select, $table, $where) {
+	public function select($select, string $table, $where = null, $condition = null) {
 		// SELECT using prepared statements
-		// usage is as follows --> select('selection', 'table', "column=value", "anotherColumn<42")
-		// Accepts any operator in the $operators array
+		// single values may be a string. multiple values passed as an array.
+		// select('selection', 'table') 
+		// becomes --> SELECT selection FROM table
+		// select(['selection', 'selector'], 'table', ['column=value', 'otherCol<otherVal', 'thirdCol>=thirdVal'], ['OR', 'OR'])
+		// becomes --> SELECT selection, selector FROM table WHERE column=value OR otherCol<otherVal OR thirdCol>=thirdVal
+		// $condition will default to AND
 		// Returns an associative array
 
-		$operators = ['> ','<','>=','<=','<>','='];
-		$wheres = [];
+		$operators = ['>','<','>=','<=','<>','=']; // '=' must be after '<=' and '>='
 		$executeParams = [];
 
-		foreach ($where as $key => $value) {
-			foreach ($operators as $checkOperator) {
-				if (strpos($value, $checkOperator) !== false) {
-					$operator = $checkOperator;
-					$operatorPos = strpos($value, $checkOperator);
-				}
-			}
-			$valueSplit = explode($operator, $value);
-			$wheres[$key]['column'] = $valueSplit[0];
-			$wheres[$key]['operator'] = $operator;
-			$wheres[$key]['value'] = $valueSplit[1];
-		}
+		$select = (is_array($select) ? implode(', ', $select) : $select);
+		$where = (is_string($where) ? [ $where ] : $where);
+		$wheres = [];
+		$condition = (is_string($condition) ? [ $condition ] : $condition);
+
 		$sql = "SELECT $select FROM $table";
-		if ($wheres) {
+
+		if (!empty($where)) {
 			$sql = $sql.' WHERE ';
+			
+			for ($i = 0; $i < count($where); $i++) {
+				foreach ($operators as $checkOperator) {
+					if (strpos($where[$i], $checkOperator) !== false) {
+						$operator = $checkOperator;
+						$operatorPos = strpos($where[$i], $checkOperator);
+					}
+				}
+				$valueSplit = explode($operator, $where[$i]);
+				$wheres[$i]['column'] = $valueSplit[0];
+				$wheres[$i]['operator'] = $operator;
+				$wheres[$i]['value'] = $valueSplit[1];
+			}
+
 			for ($i = 0; $i<count($wheres); $i++) {
 				$executeParams += [
 					':value'.$i => $wheres[$i]['value']
 				];
 				$sql = $sql.$wheres[$i]['column'].$wheres[$i]['operator']." :value$i";
 				if (($i+1) != count($wheres)) {
-					$sql = $sql.' AND ';
+					$sql = $sql.($condition[$i] ? ' '.$condition[$i].' ' : ' AND ');
 				}
 			}
 		}
