@@ -1,2 +1,2 @@
 # Kitku
-Small, simple and customization CMS. Built with PHP and SQL.
+Small, simple and customizable CMS.
