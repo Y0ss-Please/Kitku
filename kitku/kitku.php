@@ -98,45 +98,19 @@ class Kitku {
 		// $condition will default to AND
 		// Returns an associative array
 
-		$operators = ['>','<','>=','<=','<>','=']; // '=' must be after '<=' and '>='
-		$executeParams = [];
-
 		$select = (is_array($select) ? implode(', ', $select) : $select);
-		$where = (is_string($where) ? [ $where ] : $where);
-		$wheres = [];
-		$condition = (is_string($condition) ? [ $condition ] : $condition);
-
-		$sql = "SELECT $select FROM $table";
+		$command = "SELECT $select FROM $table";
 
 		if (!empty($where)) {
-			$sql = $sql.' WHERE ';
-			
-			for ($i = 0; $i < count($where); $i++) {
-				foreach ($operators as $checkOperator) {
-					if (strpos($where[$i], $checkOperator) !== false) {
-						$operator = $checkOperator;
-						$operatorPos = strpos($where[$i], $checkOperator);
-					}
-				}
-				$valueSplit = explode($operator, $where[$i]);
-				$wheres[$i]['column'] = $valueSplit[0];
-				$wheres[$i]['operator'] = $operator;
-				$wheres[$i]['value'] = $valueSplit[1];
-			}
-
-			for ($i = 0; $i<count($wheres); $i++) {
-				$executeParams += [
-					':value'.$i => $wheres[$i]['value']
-				];
-				$sql = $sql.$wheres[$i]['column'].$wheres[$i]['operator']." :value$i";
-				if (($i+1) != count($wheres)) {
-					$sql = $sql.($condition[$i] ? ' '.$condition[$i].' ' : ' AND ');
-				}
-			}
+			$getWheres = $this->get_command_wheres($where, $condition);
+			$command = $command.$getWheres[0];
+			$executeParams = $getWheres[1];
+		} else {
+			$executeParams = [];
 		}
 
 		try {
-			$stmt = $this->conn->prepare($sql);
+			$stmt = $this->conn->prepare($command);
 			$stmt->execute($executeParams);
 			return $stmt->fetchAll(PDO::FETCH_ASSOC);
 		} catch (\PDOException $e) {
@@ -145,31 +119,42 @@ class Kitku {
 		}
 	}
 
-	public function update($table, $objects, $condition) {
-		$conditions = explode('=', $condition);
+	public function update(string $table, array $objects, $where, $condition = null) {
+		// UPDATE using prepared statements
+		// usage is as follows --> insert('table', ['column0' => 'value0', column1 => value1])
+		// Returns true on success
 		$values = [];
+		$executeParams = [];
+
 		$command = "UPDATE $table SET";
-		foreach ($objects as $key => $value) {
-			$command = $command.' '.$key.' = ?,';
-			array_push($values, $value);
+
+		$i = 0;
+		foreach ($objects as $key => $object) {
+			$command = $command . ' ' . $key . ' = :object' . $i . (($i+1 < count($objects)) ? ',' : '' );
+			$executeParams[':object'.$i] = $object;
+			$i++;
 		}
-		$command = trim($command, ',').' WHERE '.$conditions[0].'=?';
-		array_push($values, $conditions[1]);
+
+		$getWheres = $this->get_command_wheres($where, $condition);
+		$command = $command.$getWheres[0];
+		foreach ($getWheres[1] as $key => $value) {
+			$executeParams[$key] = $value;
+		}
+
 		try {
 			$stmt = $this->conn->prepare($command);
-			$stmt->execute($values);
-			return true;
+			$stmt->execute($executeParams);
+			return (($stmt->rowCount() === 0) ? false : true);
 		} catch (\PDOException $e) {
 			$this->parse_errors($e->getMessage());
 			return false;
 		}
 	}
 
-	public function insert($table, $objects) {
+	public function insert($table, assoc $objects) {
 		// INSERT using prepared statements
-		// $objects is an associative array
-		// usage is as follows --> insert('table', ['column0' => 'value0', column1 => value1])
-		// Returns true on success, otherwise false
+		// usage --> insert('table', ['column0' => 'value0', column1 => value1])
+		// Returns true on success
 		$keys = '';
 		$values = [];
 		$placeholder = '';
@@ -209,6 +194,41 @@ class Kitku {
 			// print_r($error); // For testing purposes. Will echo unparsed error to browser console!!!
 		}
 		return $this->dbError;
+	}
+
+	protected function get_command_wheres($where, $condition) {
+		$operators = ['>','<','>=','<=','<>','=']; // '=' must be after '<=' and '>='
+
+		$condition = (is_string($condition) ? [ $condition ] : $condition);
+		$where = (is_string($where) ? [ $where ] : $where);
+
+		$executeParams = [];
+		$command = ' WHERE ';
+			
+		for ($i = 0; $i < count($where); $i++) {
+			foreach ($operators as $checkOperator) {
+				if (strpos($where[$i], $checkOperator) !== false) {
+					$operator = $checkOperator;
+					$operatorPos = strpos($where[$i], $checkOperator);
+				}
+			}
+			$valueSplit = explode($operator, $where[$i]);
+			$wheres[$i]['column'] = $valueSplit[0];
+			$wheres[$i]['operator'] = $operator;
+			$wheres[$i]['value'] = $valueSplit[1];
+		}
+
+		for ($i = 0; $i<count($wheres); $i++) {
+			$executeParams += [
+				':value'.$i => $wheres[$i]['value']
+			];
+			$command = $command.$wheres[$i]['column'].$wheres[$i]['operator']." :value$i";
+			if (($i+1) != count($wheres)) {
+				$command = $command.($condition[$i] ? ' '.$condition[$i].' ' : ' AND ');
+			}
+		}
+
+		return [$command, $executeParams];
 	}
 
 	/* == USER FUNCTIONS == */
