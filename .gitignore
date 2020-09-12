@@ -1,4 +1,4 @@
 *.log
 temp*
 kitku/config.json
-test.php
+/test.php
