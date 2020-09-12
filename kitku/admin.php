@@ -2,56 +2,85 @@
 
 require_once 'kitku.php';
 
-if (empty($kitku)) {
-	$kitku = new Kitku();
+class Admin extends Kitku {
+	function __construct() {
+		parent::__construct();
+		if ($this->installed !== true) {
+			$this->redirect_url();
+			exit();
+		}
+	}
+
+	function __destruct() {
+		parent::__destruct();
+	}
+
+	public function get_data($data) {
+		switch ($data) {
+			case ('posts' || 'pages'):
+				$allPosts = $this->select('*', $data);
+				foreach ($allPosts as $key => $value) {
+					if (!empty($allPosts[$key]['date'])) {
+						$allPosts[$key]['date'] = date("h:i M d, Y",$allPosts[$key]['date']);
+					}
+				}
+				return (json_encode($allPosts, JSON_PRETTY_PRINT));
+			break;
+		}
+		return false;
+	}
+
+	public function validate_new_post_form($postData) {
+		var_dump($postData);
+		if ($this->select('title', 'posts', 'title='.$postData['new-post-title'])) {
+			return 'titleTaken';
+		} else {
+			echo 'has not';
+		}
+		return true;
+	}
 }
 
-if ($kitku->installed !== true) {
-	header("Location: ".$installer->home['url']);
+$kitku = $kitku ?? new Admin();
+
+if ($kitku->check_login() !== true) {
+	$kitku->demand_login('admin');
 	exit();
 }
 
-if (!empty($_GET['request']) && $_GET['request'] == true) {
-	switch ($_POST['page']) {
-		case ('posts' || 'pages'):
-			$allPosts = $kitku->select('*', $_POST['page']);
-			echo(json_encode($allPosts, JSON_PRETTY_PRINT));
+/* -- AJAX FUNCTIONS -- */
+if (!empty($_POST)) {
+	switch($_POST['func']) {
+		case 'logout':
+			//echo(($kitku->logout()) ? 'success' : 'failed');
+			if ($kitku->logout()) {
+				echo ('success');
+			} else {
+				echo ('fail');
+			}
+		break;
+		case 'get_data':
+			echo $kitku->get_data($_POST['page']);
+		break;
+		case 'validate_new_post_form':
+			if ($kitku->validate_new_post_form($_POST)) {
+				echo "success";
+			}
 		break;
 	}
 	exit();
 }
 
-/*
-$auth = new Auth([
-	'lizards' => [
-		'dragon' => [ 'Trogdor', 'Jormungandr' , 'Smaug' ],
-		'salamander' => ['Newt', 'Olm', 'Mudpuppies']
-	]
-],[
-	'fireman' => 'John',
-	'policeman' => 'Sam',
-	'medic' => 'Yeldost'
-]);
-*/
+include $kitku->home['installServer'].'res/header.php';
 
 ?>
 
-<!DOCTYPE html>
-<html>
-<head>
+<script>
+	const installUrl = '<?= $kitku->home['installUrl'] ?>',
+		buildTableIgnores = JSON.parse('<?= json_encode($kitku->buildTableIgnores); ?>'),
+		buildTableToggles = JSON.parse('<?= json_encode($kitku->buildTableToggles); ?>');
+</script>
 
-	<meta charset="utf-8">
-	<title>Kitku Admin</title>
-	<meta name="viewport" content="width=device-width, initial-scale=1">
-	<link rel="stylesheet" type="text/css" href="<?= $kitku->home['installUrl'].'res/normalize.css'?>">
-	<link rel="stylesheet" type="text/css" href="<?= $kitku->home['installUrl'].'res/default-style.css'?>">
-	<link rel="icon" type="image/png" href="<?= $kitku->home['installUrl'].'res/images/favicon.png'?>"/>
-	<script>
-		const installUrl = '<?= $kitku->home['installUrl'] ?>',
-			buildTableIgnores = JSON.parse('<?= json_encode($kitku->buildTableIgnores); ?>'),
-			buildTableToggles = JSON.parse('<?= json_encode($kitku->buildTableToggles); ?>');
-	</script>
-</head>
 <body>
 
 	<div id="admin">
@@ -94,10 +123,16 @@ $auth = new Auth([
 
 		</div>
 
+		<div id="main-header">
+			<span>Icons from <a href="https://friconix.com/">Friconix</a></span>
+			<span>Kitku alpha-<?= $kitku->version ?></span>
+			<button id="logout-button" class="button">Logout</button>
+		</div>
+
 		<div id="main">
 
 			<div data-page="home" class="main-content active">
-				<h2>The home page</h2>
+				<h1>The home page</h1>
 				<hr />
 			</div>
 
@@ -107,36 +142,15 @@ $auth = new Auth([
 					<div data-page="new-post" class="button new-button">New Post</div>
 				</div>
 				<hr>
-
-				<div class="content-container">
-
-					<div class="content-header">
-						<h2>Posts</h2>
-					</div>
-					<div class="content-body">
-						<table id="posts-table">
-							<thead>
-								<tr>
-									<th>Title</th>
-									<th>Author</th>
-									<th>Category</th>
-									<th>Date</th>
-									<th>Tags</th>
-									<th>Views</th>
-									<th></th>
-									<th></th>
-								</tr>
-							</thead>
-							<tbody>
-
-							</tbody>
-						</table>
-					</div>
-
-					<div class="content-footer">
-						
-					</div>
-
+				<div class="table-container"">
+					<table id="posts-table">
+						<thead>
+							<tr>
+							</tr>
+						</thead>
+						<tbody>
+						</tbody>
+					</table>
 				</div>
 			</div>
 
@@ -147,36 +161,16 @@ $auth = new Auth([
 					<div data-page="new-page" class="button new-button">New Page</div>
 				</div>
 				<hr>
-
-				<div class="content-container">
-					<div class="content-header">
-						<h2>Static Pages</h2>
-					</div>
-					<div class="content-body">
-						<table id="pages-table">
-							<thead>
-								<tr>
-									<th>Title</th>
-									<th>Parent</th>
-									<th>Views</th>
-									<th>Blog Page</th>
-									<th>In Menu</th>
-									<th></th>
-									<th></th>
-								</tr>
-							</thead>
-							<tbody>
-
-							</tbody>
-						</table>
-					</div>
-
-					<div class="content-footer">
-						
-					</div>
-
+				<div class="table-container"">
+					<table id="pages-table">
+						<thead>
+							<tr>
+							</tr>
+						</thead>
+						<tbody>
+						</tbody>
+					</table>
 				</div>
-
 			</div>
 
 			<div data-page="plugins" class="main-content">
@@ -193,26 +187,48 @@ $auth = new Auth([
 
 			<!-- Sub Pages -->
 			<div data-page="new-post" class="main-content">
-				<h2>New Post Page!</h2>
+				<div class="page-title-container">
+					<h1 class="page-title">New Post</h1>
+						<div id="new-post-button" class="button">Upload</div>
+					</div>
+					<hr />
+						<form name="new-post" class="form-new-post form-grid">
+							<label for="new-post-title">Title: </label>
+							<input type="text" name="new-post-title" required></input>
+							<label for="new-post-tags">Tags: </label>
+							<input type="text" name="new-post-tags" placeholder="Seperated by commas. Letters and numbers only."></input>
+							<label for="new-post-category">Category: </label>
+							<input type="text" name="new-post-category"></input>
+							<label for="new-post-image">Post Image: </label>
+							<input type="file" name="new-post-image"></input>
+							<input class="hidden" type="submit"></input>
+						</form>
+					<br>
+					<textarea class="hidden" name="new-post-content"></textarea>
+					<!-- Hidden textarea gets populated by quill.getContents() -->
+					<div class="editor-container">
+						<div class="editor" id="post-editor"></div>
+					</div>
+				</div>
 			</div>
 
 			<div data-page="new-page" class="main-content">
 				<h2>New Page Page!</h2>
+				<hr />
+				<div class="editor-container">
+					<div class="editor" id="page-editor"></div>
+				</div>
 			</div>
 
 		</div>
-
-		<div id="footer">
-			Kitku alpha-<?= $kitku->version ?> || icons from <a href="https://friconix.com/">Friconix</a>
-		</div>
-
 	</div>
 
 	<svg class="icon-edit hidden" width="24" height="24" viewBox="0 0 1000 1000" xmlns="http://www.w3.org/2000/svg"><path d=" M 229 615C 229 615 382 766 382 766C 382 766 356 792 356 792C 351 798 344 800 338 802C 338 802 210 828 210 828C 186 832 163 810 169 785C 169 785 195 659 195 659C 195 652 199 646 203 641C 203 641 229 615 229 615M 713 137C 713 137 865 288 865 288C 865 288 432 716 432 716C 432 716 279 565 279 565C 279 565 713 137 713 137M 839 25C 848 25 858 29 865 36C 865 36 967 137 967 137C 980 150 980 173 967 187C 967 187 915 237 915 237C 915 237 763 86 763 86C 763 86 815 36 815 36C 821 29 830 25 839 25C 839 25 839 25 839 25M 150 13C 150 13 650 13 650 13C 664 12 676 19 683 31C 690 43 690 57 683 69C 676 81 664 88 650 88C 650 88 150 88 150 88C 138 88 121 95 108 108C 95 121 88 138 88 150C 88 150 88 850 88 850C 88 862 95 879 108 892C 121 905 138 912 150 912C 150 912 850 912 850 912C 862 912 879 905 892 892C 905 879 912 862 912 850C 912 850 912 350 912 350C 912 336 919 324 931 317C 943 310 957 310 969 317C 981 324 988 336 987 350C 987 350 987 850 987 850C 987 887 970 920 945 945C 921 970 888 987 850 987C 850 987 150 987 150 987C 113 987 79 970 55 945C 30 921 13 887 13 850C 13 850 13 150 13 150C 13 113 30 79 55 55C 79 30 113 13 150 13C 150 13 150 13 150 13"/></svg>
 
 	<svg class="icon-delete hidden" width="24" height="24" viewBox="0 0 1000 1000" xmlns="http://www.w3.org/2000/svg"><path d=" M 357 378C 344 378 332 390 333 403C 333 403 329 848 329 848C 329 857 333 866 341 870C 349 875 359 875 366 870C 374 866 379 858 379 849C 379 849 383 404 383 404C 383 397 380 391 375 386C 371 381 364 378 357 378C 357 378 357 378 357 378M 650 375C 636 375 625 386 625 400C 625 400 625 850 625 850C 625 859 630 867 637 872C 645 876 655 876 663 872C 670 867 675 859 675 850C 675 850 675 400 675 400C 675 393 672 387 668 382C 663 377 656 375 650 375C 650 375 650 375 650 375M 500 375C 486 375 475 386 475 400C 475 400 475 850 475 850C 475 859 480 867 487 872C 495 876 505 876 513 872C 520 867 525 859 525 850C 525 850 525 400 525 400C 525 393 522 387 518 382C 513 377 506 375 500 375C 500 375 500 375 500 375M 198 299C 198 299 800 299 800 299C 800 299 800 850 800 850C 800 913 759 950 700 950C 700 950 300 950 300 950C 238 950 200 911 201 855C 201 855 198 299 198 299M 438 138C 438 138 438 187 438 187C 438 187 563 187 563 187C 563 187 563 138 563 138C 563 138 438 138 438 138M 425 63C 425 63 575 63 575 63C 609 63 638 91 638 125C 638 125 638 187 638 187C 638 187 849 187 849 187C 870 187 887 204 887 225C 887 245 870 262 849 262C 849 262 151 263 151 263C 130 263 113 246 113 225C 113 205 130 188 151 188C 151 188 363 188 363 188C 363 188 363 125 363 125C 363 125 362 125 362 125C 362 91 391 63 425 63C 425 63 425 63 425 63"/></svg>
 
-	<script src="<?= $kitku->home['installUrl'].'admin.js' ?>"></script>
+	<script src="<?= $kitku->home['installUrl'].'res/js/quill.js' ?>"></script>
+	<script type="module" src="<?= $kitku->home['installUrl'].'res/js/admin.js' ?>"></script>
 
 </body>
 </html>

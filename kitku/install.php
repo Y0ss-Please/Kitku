@@ -8,6 +8,7 @@ class KitkuInstaller extends Kitku {
 		if (!$this->get_config()) {
 			$this->set_home();
 			$defaultConfig = [
+				// Default entries for config.json
 				'siteName' => 'NewKitkuSite',
 				'installed' => 0,
 				'dbInfo' => '',
@@ -25,6 +26,7 @@ class KitkuInstaller extends Kitku {
 	}
 
 	private function set_home() {
+		// Creates an array of both url and server paths of the current install
 		$filename = [];
 		$regex = "([^\\\/]+$)"; // Match last backslash or forward slash.
 		preg_match($regex, $_SERVER['SCRIPT_FILENAME'], $filename);
@@ -39,7 +41,7 @@ class KitkuInstaller extends Kitku {
 		];
 	}
 
-	public function set_dbInfo($dbInfo) {
+	public function set_dbInfo(array $dbInfo) {
 		$this->dbInfo = $dbInfo;
 	}
 
@@ -60,7 +62,7 @@ class KitkuInstaller extends Kitku {
 
 	public function create_table($name, $columns = false) {
 		$command = "CREATE TABLE $name(id INT(6) PRIMARY KEY AUTO_INCREMENT)";
-		if (!$this->try_command($command)) { 
+		if (!$this->do_command($command)) { 
 			return false; 
 		}
 		if ($columns) {
@@ -74,14 +76,14 @@ class KitkuInstaller extends Kitku {
 	public function alter_table($name, $columns) {
 		foreach ($columns as $colName => $type) {
 			$command = "ALTER TABLE $name ADD $colName $type";
-			if (!$this->try_command($command)) { 
+			if (!$this->do_command($command)) { 
 				return false; 
 			}
 		}
 		return true;
 	}
 
-	private function try_command($try) {
+	private function do_command($try) {
 		if ($this->conn->query($try)) {
 			return true;
 		} else {
@@ -89,40 +91,48 @@ class KitkuInstaller extends Kitku {
 			return false;
 		}
 	}
+
+	public function first_login() {
+		$userInfo = ($this->select('*', 'users', 'id=1'))[0];
+		$this->set_session_cookie($userInfo);
+		return 'success';
+	}
 }
 
-$installer = new KitkuInstaller;
+$kitku = new KitkuInstaller;
 
-if (isset($installer->installed) && $installer->installed === true) {
-	header("Location: ".$installer->home['url']);
+// If already installed, return home.
+if (isset($kitku->installed) && $kitku->installed === true) {
+	header("Location: ".$kitku->home['url']);
 	exit();
 }
 
-if (isset($_GET['formdata']) && $_GET['formdata'] == true) {
+if (!empty($_POST)) {
 	switch ($_POST['page']) {
 		case 0:
+		// Page 0 formdata collects database login information.
 		// Check if user provided data allows for server connection.
 			$dbInfo = [
 				'server' => $_POST['database-servername'], 
 				'username' => $_POST['database-username'], 
 				'password' => $_POST['database-password'],
-				'database' => 'kitku_'.random_string(5)
+				'database' => 'kitku_'.$kitku->random_string(5)
 			];
 
-			if ($installer->open_conn($dbInfo['server'], $dbInfo['username'], $dbInfo['password'])) {
+			if ($kitku->open_conn($dbInfo['server'], $dbInfo['username'], $dbInfo['password'])) {
 				$dbCreated = 0;
 				while($dbCreated !== true) {
-					if ($installer->create_database($dbInfo['database'], false)) {
+					if ($kitku->create_database($dbInfo['database'], false)) {
 						$dbCreated = true;
-						$installer->set_dbInfo($dbInfo);
-						$installer->installed = 1;
-						if ($installer->set_config()) {
+						$kitku->set_dbInfo($dbInfo);
+						$kitku->installed = 1;
+						if ($kitku->set_config()) {
 							exit('success');
 						} else {
 							exit('serveErr');
 						}
 					} else {
-						$dbInfo['database'] = random_string(6);
+						$dbInfo['database'] = $kitku->random_string(5);
 						$dbCreated++;
 					}
 					if ($dbCreated > 10) {
@@ -130,19 +140,25 @@ if (isset($_GET['formdata']) && $_GET['formdata'] == true) {
 					}
 				}
 			} else {
-				exit($installer->dbError);
+				exit($kitku->dbError);
 			}
 			break;
 
 		case 1:
-		// Build basic database structure
+		// Page 1 collects admin user information
+		// The following builds the database tables and sets them to default values
 			$usersColumns = [
 				'username' => 'VARCHAR(30) NOT NULL',
 				'email' => 'VARCHAR(30)',
-				'password' => 'VARCHAR(255) NOT NULL'
+				'password' => 'VARCHAR(255) NOT NULL',
+				'power' => 'VARCHAR(30) NOT NULL',
+				'authToken' => 'VARCHAR(255) NOT NULL',
+				'authSelector' => 'VARCHAR(50) NOT NULL',
+				'authExpires' => 'INT(12) DEFAULT UNIX_TIMESTAMP() NOT NULL'
 			];
 			$postsColumns = [
 				'title' => 'VARCHAR(80) NOT NULL',
+				'urlTitle' => 'VARCHAR(255) NOT NULL',
 				'author' => 'VARCHAR(255)',
 				'category' => "VARCHAR(30) DEFAULT 'uncategorized' NOT NULL",
 				'date' => 'INT(12) DEFAULT UNIX_TIMESTAMP() NOT NULL',
@@ -158,99 +174,96 @@ if (isset($_GET['formdata']) && $_GET['formdata'] == true) {
 				'blogPage' => 'BOOLEAN NOT NULL DEFAULT FALSE',
 				'showInMenu' =>'BOOLEAN NOT NULL DEFAULT TRUE'
 			];
-			if (!$installer->create_table('users', $usersColumns)) {
+			if (!$kitku->create_table('users', $usersColumns)) {
 				exit('serveErr-1');
 			}
-			if (!$installer->create_table('posts', $postsColumns)) {
+			if (!$kitku->create_table('posts', $postsColumns)) {
 				exit('serveErr-2');
 			}
-			if (!$installer->create_table('pages', $pagesColumns)) {
+			if (!$kitku->create_table('pages', $pagesColumns)) {
 				exit('serveErr-3');
 			}
 
 			$userInfo = [
 				'username' => $_POST['username'],
 				'email' => $_POST['email'],
-				'password' => password_hash($_POST['password'], PASSWORD_DEFAULT)
+				'password' => password_hash($_POST['password'], PASSWORD_DEFAULT),
+				'power' => 'admin',
+				'authToken' => '',
+				'authSelector' => '',
+				'authExpires' => '0'
 			];
-			// Should make these defaults more professional looking...
+
 			$defaultPost = [
-				'title' => 'My new Kitku Site!',
+				'title' => 'My first Kitku post!',
+				'urlTitle' => '',
 				'author' => 'Kitku',
 				'category' => 'uncategorized',
 				'date' => time(),
 				'tags' => 'first-post,default',
 				'views' => '',
-				'content' => 'A dove and a fist'
+				'content' => 'This is a default post. You should probably delete it and replace with something more interesting...'
 			];
+			$defaultPost['urlTitle'] = $kitku->strip_special_chars($defaultPost['title']);
+			
 			$defaultBlog = [
 				'title' => 'Blog',
 				'parent' => '',
 				'views' => '',
-				'content' => 'The blog page!',
+				'content' => 'This is the default blog page. Your posts will be collected and displayed here',
 				'blogPage' => 1,
 				'showInMenu' => 1
 			];
-			$defaultAbout = [
-				'title' => 'About',
-				'parent' => '',
-				'views' => '',
-				'content' => 'This is the about page. <h2>This is an h2 tag</h2>',
-				'blogPage' => 0,
-				'showInMenu' => 1
-			];
 
-			if (!$installer->insert('posts', $defaultPost)) {
-				echo $installer->dbError;
+			if (!$kitku->insert('posts', $defaultPost)) {
+				echo $kitku->dbError;
 				exit('sqlErr-1');
 			}
 
-			if (!$installer->insert('pages', $defaultBlog)) {
+			if (!$kitku->insert('pages', $defaultBlog)) {
 				exit('sqlErr-2');
 			}
 
-			if (!$installer->insert('pages', $defaultAbout)) {
-				exit('sqlErr-3');
-			}
-
-			if ($installer->insert('users', $userInfo)) {
-				$installer->installed = 2;
-				if ($installer->set_config()) {
+			if ($kitku->insert('users', $userInfo)) {
+				$kitku->installed = 2;
+				if ($kitku->set_config()) {
 					exit('success');
 				}
 			}
 			exit('serveErr-0');
 			break;
 		case 2:
-		// Get the site name and redirect
-			$installer->siteName = $_POST['sitename'];
-			$installer->installed = true;
-			if ($installer->set_config()) {
+		// Page 2 gets the website name
+		// The user is logged in before being redirected to the admin panel
+			$kitku->siteName = $_POST['sitename'];
+			$kitku->installed = true;
+			if ($kitku->set_config()) {
+				$kitku->first_login();
 				exit('goHome');
 			}
 			exit('serveErr');
 			break;
 	}	
 } else {
-?>
-<!DOCTYPE html>
-<html>
-<head>
 
-	<meta charset="utf-8">
-	<title>Kitku Installer</title>
-	<meta name="viewport" content="width=device-width, initial-scale=1">
-	<link rel="stylesheet" type="text/css" href="<?= $installer->home['installUrl'].'res/normalize.css'?>">
-	<link rel="stylesheet" type="text/css" href="<?= $installer->home['installUrl'].'res/default-style.css'?>">
-	<link rel="icon" type="image/png" href="<?= $installer->home['installUrl'].'res/images/favicon.png'?>"/>
-</head>
+	include $kitku->home['installServer'].'res/header.php';
+
+?>
+
+<script>
+	const installUrl = '<?= $kitku->home['installUrl'] ?>',
+		homeUrl = '<?= $kitku->home['url'] ?>';
+
+	let activePage = <?= (isset($kitku->installed) ? $kitku->installed : 0); ?>;
+</script>
+
 <body>
 	<div id="installer">
 
 		<div class="content-container">
 
 			<div class="content-header">
-				<img id="kitku-logo" width="64px" height="64px" src="<?= $installer->home['installUrl'].'res/images/logo.png'?>" />
+				<img id="kitku-logo" width="64px" height="64px" src="<?= $kitku->home['installUrl'].'res/images/logo.png'?>" />
 				<h1>Welcome to Kitku!</h1>
 				<em>- Simple Content Management -</em>
 			</div>
@@ -320,119 +333,7 @@ if (isset($_GET['formdata']) && $_GET['formdata'] == true) {
 
 	</div>
 
-	<script>
-		const containerBody = document.querySelector('.content-body'),
-		nextButton = document.getElementById('next-button'),
-		backButton = document.getElementById('back-button'),
-		buttons = document.querySelectorAll('.button'),
-		paginatePages = document.querySelectorAll('.paginate-page'),
-		paginateButtons = document.querySelectorAll('.paginate-button'),
-		paginateCount = paginatePages.length,
-		pageMessage = document.getElementById('message');
-
-		const installUrl = '<?= $installer->home['installUrl'] ?>';
-		const homeUrl = '<?= $installer->home['url'] ?>';
-
-		let activePage = <?= (isset($installer->installed) ? $installer->installed : 0); ?>;
-
-		function paginate(num) {
-
-			setVisibility(paginatePages);
-			setVisibility(paginateButtons);
-
-			if (num == 'msg') {
-				buttons.forEach((e)=>e.classList.add('hidden'));
-				pageMessage.classList.remove('hidden');
-			} else {
-				pageMessage.classList.add('hidden');
-			}
-
-			function setVisibility(elements) {
-				elements.forEach( function(element) {
-					if (element.classList.contains('page'+num)) {
-						element.classList.remove('hidden');
-					} else {
-						element.classList.add('hidden');
-					}
-				});
-			}
-		}
-
-		function formSubmit(e, page) {
-			e.preventDefault();
-
-			paginate('msg');
-
-			let count = 0;
-			const interval = setInterval(function() {
-				pageMessage.textContent.includes('...') ? pageMessage.textContent = 'Working on it' : pageMessage.textContent += '.';
-				count++;
-				if (count > 20) {
-					clearInterval(interval);
-					pageMessage.firstChild.textContent = 'This is taking far longer than it should. Check your internet connection, or try restarting your browser.';
-				}
-			}, 500);
-
-			const fd = new FormData(e.srcElement);
-			fd.append('page', page);
-
-			const xhttp = new XMLHttpRequest();
-				xhttp.open('POST', installUrl+'install.php?formdata=true', true);
-				xhttp.send(fd);
-
-			xhttp.onreadystatechange = function() {
-		            if (this.readyState == 4 && this.status == 200){
-						clearInterval(interval);
-		            	if (this.responseText.includes('success')) {
-		            		activePage++;
-							paginate(activePage);	
-		            	} else if (this.responseText.includes('goHome')){
-		            		window.location.replace(homeUrl+'admin');
-		            	} else {
-		            		if (this.responseText.includes('noHost')) {
-		        				resetPage('Host not found. Check your server name and try again.');
-		                	} else if (this.responseText.includes('badCred')) {
-		                		resetPage('Bad credentials. Confirm your username and password are correct.');
-		                	} else if (this.responseText.includes('serveErr')){
-		                		resetPage('Server Error. Please try again.');
-		                	} else if (this.responseText.includes('createDBFail')){
-		                		resetPage("Can't create database. Check your database priveledges.");
-		                	} else {
-		                		resetPage('There was an unknown error, please contact the Kitku team.');
-		                	}
-		            	}
-		            }
-		        }
-
-		    function resetPage(msg) {
-		    	clearInterval(interval);
-				pageMessage.textContent = msg;
-				backButton.classList.remove('hidden');
-				backButton.addEventListener('click', function _listener() {
-					paginate(activePage);
-					pageMessage.textContent = 'Working on it';
-					backButton.classList.add('hidden');
-					backButton.removeEventListener("click", _listener, true);
-				}, true);
-		    }    
-		}
-
-		function init() {
-			paginate(activePage);
-			document.addEventListener('keydown', (ele) => {
-			// Enter key progresses page
-				if (ele.keyCode == 13) {
-					buttons.forEach( (e)=> {
-						if (!e.classList.contains('hidden')) {
-							e.click();
-						}
-					})
-				}
-			});
-		}
-
-		init();
-	</script>
+	<script src="<?= $kitku->home['installUrl'].'res/js/install.js' ?>"></script>
 </body>
 </html>
 <?php } ?>

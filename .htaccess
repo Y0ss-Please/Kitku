@@ -1,2 +1,6 @@
 RewriteEngine on
 RewriteRule ^admin? index.php?page=admin
+
+<IfModule php5_module>
+    php_flag session.cookie_httponly on
+</IfModule>
