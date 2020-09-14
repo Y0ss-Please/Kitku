@@ -1,4 +1,6 @@
 *.log
-temp*
 kitku/config.json
-/test.php
+temp*
+images/*
+!images/temp
+images/temp/*

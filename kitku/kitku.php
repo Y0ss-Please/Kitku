@@ -121,7 +121,8 @@ class Kitku {
 
 	public function update(string $table, array $objects, $where, $condition = null) {
 		// UPDATE using prepared statements
-		// usage is as follows --> insert('table', ['column0' => 'value0', column1 => value1])
+		// usage is as follows --> insert('table', ['column0' => 'value0', column1 => value1], ['col1=val1', 'col2=val2'], ['OR'])
+		// $condition will default to AND
 		// Returns true on success
 		$values = [];
 		$executeParams = [];
@@ -151,7 +152,7 @@ class Kitku {
 		}
 	}
 
-	public function insert($table, assoc $objects) {
+	public function insert(string $table, array $objects) {
 		// INSERT using prepared statements
 		// usage --> insert('table', ['column0' => 'value0', column1 => value1])
 		// Returns true on success
@@ -188,10 +189,10 @@ class Kitku {
 			} else {
 				$this->dbError = 'other';
 			}
-			// echo($error); // For testing purposes. Will echo unparsed error to browser console!!!
+			echo($error); // For testing purposes. Will echo unparsed error to browser console!!!
 		} else {
 			$this->dbError = 'other';
-			// print_r($error); // For testing purposes. Will echo unparsed error to browser console!!!
+			print_r($error); // For testing purposes. Will echo unparsed error to browser console!!!
 		}
 		return $this->dbError;
 	}
@@ -333,7 +334,7 @@ class Kitku {
 	private function update_auth_expiry($username) {
 		$expire = time() + $this->authCookieDuration;
 		$this->update('users', ['authExpires' => $expire], 'username='.$username);
-		$userInfo = $this->select('authToken, authSelector', 'users', 'username='.$username);
+		$userInfo = $this->select(['authToken', 'authSelector'], 'users', 'username='.$username);
 		setcookie('auth', $userInfo[0]['authToken'].':'.$userInfo[0]['authSelector'], $expire, '/');
 	}
 
@@ -348,6 +349,7 @@ class Kitku {
 		$string = preg_replace('/[^\p{L}\p{N}\s]/u', '', $string);
 		$string = str_replace(' ', '-', $string);
 		$string = strtolower($string);
+		$string = trim($string, '-');
 		return $string;
 	}
 
@@ -378,6 +380,109 @@ class Kitku {
 		echo '<br /><pre style="color: black; background-color: white;">';
 		var_dump($var);
 		echo '</pre><br />';
+	}
+}
+
+class KitkuImageUploader {
+	public $error = false;
+	private $allowedTypes = ['image/png', 'image/gif', 'image/jpg', 'image/jpeg'];
+
+	private $path;
+	private $width;
+	private $height;
+	private $mime;
+	private $rotation;
+	private $orientation; // 0 = square, 1 = landscape, 2 = portrait
+	private $aspectRatio; // stored as float. 1.6 = 1280x800 = 16:10
+
+	private $thumbWidth = 800;
+	private $thumbHeight = 480;
+	private $reducedWidth= 2048;
+	private $reducedHeight= 1080;
+
+	public function __construct(string $image, string $targetPath, string $filename, string $type = 'path') {
+		if ($type == 'path') {
+			$this->path = $image;
+		} else if ($type == 'base64') {
+			$this->path = $this->base64_temp_image($image, $targetPath, $filename);
+		}
+		list($this->width, $this->height) = getimagesize($this->path);
+		$this->mime = mime_content_type($this->path);
+		$this->rotation = ($this->mime == 'image/jpeg' || $this->mime == 'image/jpg') ? $this->get_rotation($this->path) : 0;
+		$this->orientation = $this->get_orientation($this->width, $this->height, $this->rotation);
+		$this->aspectRatio = $this->get_aspect_ratio($this->width, $this->height);
+	}
+
+	public function handle_image() {
+
+	}
+
+	private function get_rotation($imagePath) {
+		// Gets the rotation of the image set by it's exif data
+		// Returns degree of rotaion.
+		// deafaults to 0 if no exif data is found.
+		$aspect = 0;
+		$exif = exif_read_data($imagePath);
+	  
+		if ($exif && !empty($exif['Orientation'])) {
+			switch ($exif['Orientation']) {
+				case 3:
+					$aspect = 180;
+					break;
+	  
+				case 6:
+					$aspect = 90;
+					break;
+	  
+				case 8:
+					$aspect = -90;
+					break;
+			}
+		}
+		return $aspect;
+	}
+
+	private function get_orientation($width, $height, $rotation = 0) {
+		if ($width === $height) {
+			return 0;
+		}
+		$landscape = ($width > $height) ? true : false;
+		$landscape = (abs($rotation) === 90) ? !$landscape : $landscape;
+
+		return ($landscape) ? 1 : 2;
+	}	
+
+	private function get_aspect_ratio($width, $height) {
+		if ($width > $height) {
+			$big = $width;
+			$small = $height;
+		} else {
+			$big = $height;
+			$small = $width;
+		}
+		return round($big/$small, 4);
+	}
+
+	private function base64_temp_image($imageString, $targetPath, $filename) {
+		$imageData = explode(',', $imageString);
+		$imageBase64 = end($imageData);
+		$imageBin = base64_decode($imageBase64);
+		$image = imageCreateFromString($imageBin);
+
+		if (!$image) {
+			$this->error = 'invalidImageString';
+			return false;
+		}
+
+		$output = $targetPath.$filename.'.png';
+
+		imagealphablending($image, false);
+		imagesavealpha($image, true);
+		header('Content-Type: image/png');
+		imagepng($image, $output);
+		imagedestroy($image);
+
+		return $output;
 	}
 }
 

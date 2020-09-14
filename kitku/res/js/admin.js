@@ -1,7 +1,27 @@
+import * as name from "./quill.js";
+
+const newPost = new Quill('#post-editor', {
+    modules: {
+        toolbar: [
+            ['bold', 'italic', 'underline', 'strike'],
+            ['blockquote', 'code-block'],
+            [{ 'align': [] }],
+            [{ 'list': 'ordered'}, { 'list': 'bullet' }],
+            [{ 'script': 'sub'}, { 'script': 'super' }],
+            [{ 'color': [] }, { 'background': [] }],
+            [{ 'header': [1, 2, 3, 4, 5, 6, false] }],
+            [ 'link', 'image', 'video' ],
+        ]
+    },
+    placeholder: 'Compose an epic...',
+    theme: 'snow'
+});
+
 const mainContents = document.querySelectorAll('.main-content'),
     navbarItems = document.querySelectorAll('.navbar-item'),
     newButtons = document.querySelectorAll('.new-button'),
     newPostButton = document.getElementById('new-post-button'),
+    newPostSubmit = document.getElementById('new-post-submit'),
     logoutButton = document.getElementById('logout-button');
 
 const pageChangers = [navbarItems, newButtons];
@@ -13,7 +33,10 @@ function build_listners() {
 
     logoutButton.addEventListener('click', logout);
 
-    newPostButton.addEventListener('click', new_post);
+    newPostButton.addEventListener('click', () => {
+        newPostSubmit.click()
+        new_post();
+    });
 
     function set_page_change_listeners(list) {
         list.forEach(element => {
@@ -125,27 +148,26 @@ function change_page(page) {
 }
 
 function new_post() {
-    const form = document.forms['new-post'];
     
-    if (!validate()) return false;
+    const form = document.forms['new-post'];
+    if (!form['new-post-title'].value) return false ;
 
-    function validate() {
-        const fd = new FormData(form);
-        fd.append('func', 'validate_new_post_form')
+    const fd = new FormData(form);
+    fd.append('new-post-content', newPost.root.innerHTML);
+    fd.append('func', 'new_post')
 
-        const xhttp = new XMLHttpRequest();
-                xhttp.open('POST', installUrl+'admin.php', true);
-                xhttp.send(fd);
+    const xhttp = new XMLHttpRequest();
+            xhttp.open('POST', installUrl+'admin.php', true);
+            xhttp.send(fd);
 
-        xhttp.onreadystatechange = function() {
-            if (this.readyState == 4 && this.status == 200){
-                const result = this.responseText;
-                console.log(result);
-                if (result == 'success') {
-                    console.log('success')
-                } else if (result == 'failed') {
-                    console.log('fail');
-                }
+    xhttp.onreadystatechange = function() {
+        if (this.readyState == 4 && this.status == 200){
+            const result = this.responseText;
+            console.log(result);
+            if (result == 'success') {
+                console.log('success')
+            } else if (result == 'titleTaken') {
+                console.log('fail');
             }
         }
     }
@@ -170,23 +192,6 @@ function logout() {
 function init() {
 
     build_listners();
-
-    const newPost = new Quill('#post-editor', {
-        modules: {
-            toolbar: [
-                ['bold', 'italic', 'underline', 'strike'],
-                ['blockquote', 'code-block'],
-                [{ 'align': [] }],
-                [{ 'list': 'ordered'}, { 'list': 'bullet' }],
-                [{ 'script': 'sub'}, { 'script': 'super' }],
-                [{ 'color': [] }, { 'background': [] }],
-                [{ 'header': [1, 2, 3, 4, 5, 6, false] }],
-                [ 'link', 'image', 'video' ],
-            ]
-        },
-        placeholder: 'Compose an epic...',
-        theme: 'snow'
-    });
 
     const newPage = new Quill('#page-editor', {
         modules: {
