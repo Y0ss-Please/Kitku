@@ -7,12 +7,19 @@ class KitkuInstaller extends Kitku {
 		parent::__construct();
 		if (!$this->get_config()) {
 			$this->set_home();
+			$imageMaxSizes =[
+				"small" => ["640", "320"],
+				"medium" => ["1440", "720"],
+				"large" => ["2048", "1024"],
+				"extraLarge" => ["3840", "1920"]
+			];
 			$defaultConfig = [
 				// Default entries for config.json
 				'siteName' => 'NewKitkuSite',
 				'installed' => 0,
 				'dbInfo' => '',
 				'home' => $this->home,
+				'imageMaxSizes' => $imageMaxSizes,
 				'configIgnores' => ['conn', 'dbError', 'currentPath'], // Object variables NOT stored in config.json
 				'buildTableIgnores' => ['id', 'content'], // Columns ignored by build_table() in admin javascript
 				'buildTableToggles' => ['blogPage', 'showInMenu'] // Columns displayed as a toggle by build_table() in admin javascript

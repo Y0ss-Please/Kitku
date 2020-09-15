@@ -189,10 +189,10 @@ class Kitku {
 			} else {
 				$this->dbError = 'other';
 			}
-			echo($error); // For testing purposes. Will echo unparsed error to browser console!!!
+			//echo($error); // For testing purposes. Will echo unparsed error to browser console!!!
 		} else {
 			$this->dbError = 'other';
-			print_r($error); // For testing purposes. Will echo unparsed error to browser console!!!
+			//print_r($error); // For testing purposes. Will echo unparsed error to browser console!!!
 		}
 		return $this->dbError;
 	}
@@ -387,7 +387,8 @@ class KitkuImageUploader {
 	public $error = false;
 	private $allowedTypes = ['image/png', 'image/gif', 'image/jpg', 'image/jpeg'];
 
-	private $path;
+	private $image;
+
 	private $width;
 	private $height;
 	private $mime;
@@ -395,26 +396,85 @@ class KitkuImageUploader {
 	private $orientation; // 0 = square, 1 = landscape, 2 = portrait
 	private $aspectRatio; // stored as float. 1.6 = 1280x800 = 16:10
 
-	private $thumbWidth = 800;
-	private $thumbHeight = 480;
-	private $reducedWidth= 2048;
-	private $reducedHeight= 1080;
+	private $path;
+	private $ext;
+	private $fullsizePath;
 
-	public function __construct(string $image, string $targetPath, string $filename, string $type = 'path') {
+	public function __construct(string $data, string $targetPath, string $filename, string $type = 'path') {
 		if ($type == 'path') {
-			$this->path = $image;
+			$imageData = getimagesize($data);
+			$this->set_image_data($imageData);
+			$this->rotation = $this->get_rotation($data);
+			$this->image = $this->imagecreate($data, $this->mime);
 		} else if ($type == 'base64') {
-			$this->path = $this->base64_temp_image($image, $targetPath, $filename);
+			$imageData = explode(',', $data);
+			$imageBase64 = end($imageData);
+			$imageBin = base64_decode($imageBase64);
+			$this->image = imageCreateFromString($imageBin);
+			$imageData = getimagesizefromstring($imageBin);
+
+			if (!$this->image) {
+				$this->error = 'invalidImageString';
+				return false;
+			}
+
+			$this->set_image_data($imageData);
 		}
-		list($this->width, $this->height) = getimagesize($this->path);
-		$this->mime = mime_content_type($this->path);
-		$this->rotation = ($this->mime == 'image/jpeg' || $this->mime == 'image/jpg') ? $this->get_rotation($this->path) : 0;
+
+		$this->ext = '.'.substr($this->mime, 6);
+		$this->path = $targetPath.$filename;
+		$this->fullsizePath = $this->path.'_fullsize'.$this->ext;
 		$this->orientation = $this->get_orientation($this->width, $this->height, $this->rotation);
 		$this->aspectRatio = $this->get_aspect_ratio($this->width, $this->height);
+
+
+		if (!$this->mime_allowed($this->mime)) {
+			$this->error = 'invalidMimeType';
+			return false;
+		}
+
+		if ($this->rotation !== 0) {
+			$this->image = imagerotate($this->image, $this->rotation, 0);
+		}
 	}
 
-	public function handle_image() {
+	public function save_as_uploaded() {
+		if ($this->mime == 'image/png' || $this->mime == 'image/gif'){
+			imagealphablending($this->image, false);
+			imagesavealpha($this->image, true);
+		}
+		header('Content-Type: '.$this->mime);
+		$this->imagefrom($this->fullsizePath, 100);
+	}
 
+	private function imagecreate($path, $mime) {
+		switch (substr($this->mime, 6)) {
+			case 'jpeg':
+			case 'jpg':
+				return imagecreatefromjpeg($path);
+			break;
+			case 'png':
+				return imagecreatefrompng($path);
+			break;
+			case 'gif':
+				return imagecreatefromgif($path);
+			break;
+		}
+	}
+
+	private function imagefrom($targetPath, int $quality = null) {
+		switch (substr($this->mime, 6)) {
+			case 'jpeg':
+			case 'jpg':
+				return imagejpeg($this->image, $targetPath, $quality);
+			break;
+			case 'png':
+				return imagepng($this->image, $targetPath);
+			break;
+			case 'gif':
+				return imagegif($this->image, $targetPath);
+			break;
+		}
 	}
 
 	private function get_rotation($imagePath) {
@@ -422,21 +482,21 @@ class KitkuImageUploader {
 		// Returns degree of rotaion.
 		// deafaults to 0 if no exif data is found.
 		$aspect = 0;
-		$exif = exif_read_data($imagePath);
-	  
-		if ($exif && !empty($exif['Orientation'])) {
-			switch ($exif['Orientation']) {
-				case 3:
-					$aspect = 180;
-					break;
-	  
-				case 6:
-					$aspect = 90;
-					break;
-	  
-				case 8:
-					$aspect = -90;
-					break;
+		if ($exif = @exif_read_data($imagePath)) {
+			if ($exif && !empty($exif['Orientation'])) {
+				switch ($exif['Orientation']) {
+					case 3:
+						$aspect = 180;
+						break;
+		  
+					case 6:
+						$aspect = -90;
+						break;
+		  
+					case 8:
+						$aspect = 90;
+						break;
+				}
 			}
 		}
 		return $aspect;
@@ -464,25 +524,19 @@ class KitkuImageUploader {
 	}
 
 	private function base64_temp_image($imageString, $targetPath, $filename) {
-		$imageData = explode(',', $imageString);
-		$imageBase64 = end($imageData);
-		$imageBin = base64_decode($imageBase64);
-		$image = imageCreateFromString($imageBin);
-
-		if (!$image) {
-			$this->error = 'invalidImageString';
-			return false;
-		}
-
-		$output = $targetPath.$filename.'.png';
-
-		imagealphablending($image, false);
-		imagesavealpha($image, true);
-		header('Content-Type: image/png');
-		imagepng($image, $output);
-		imagedestroy($image);
+		
 
 		return $output;
+	}
+
+	private function mime_allowed($mime) {
+		return (in_array($mime, $this->allowedTypes) ? true : false );
+	}
+
+	private function set_image_data($imageData) {
+		$this->width = $imageData[0];
+		$this->height = $imageData[1];
+		$this->mime = $imageData['mime'];
 	}
 }
 
