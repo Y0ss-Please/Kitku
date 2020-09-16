@@ -43,10 +43,16 @@ class Admin extends Kitku {
 
 		$tags = $_POST['new-post-tags'];
 		$category = $_POST['new-post-category'];
-		$image = new KitkuImageUploader($imageData['tmp_name'], $this->home['server'].'images/', $urlTitle);
-		if ($image->handle_image()) {
+
+		$images = json_decode($postData['images']);
+		var_dump($images);
+		$imageMain = new KitkuImage($imageData['tmp_name'], $this->home['server'].'images/', $urlTitle);
+		if ($imageMain->error) {
 			return $image->error;
-		};
+		} else {
+			$imageMain->save($this->imageMaxSizes);
+		}
+
 		$content = $purifier->purify($postData['new-post-content']);
 
 		$insert = [
@@ -60,30 +66,13 @@ class Admin extends Kitku {
 			'content' => $content
 		];
 
+		/*
 		if ($this->insert('posts', $insert)) {
 			return true;
 		} else {
 			return 'serverError';
 		}
-	}
-
-	protected function upload_form_image(array $imageData, string $filename) {
-		$image = $imageData['tmp_name'];
-		$targetDirectory = $this->home['server'].'images/';
-		$imageType = strtolower(pathinfo($imageData['name'], PATHINFO_EXTENSION));
-		$imageMime = mime_content_type($image);
-
-		$allowedTypes = ['image/png', 'image/gif', 'image/jpg', 'image/jpeg'];
-
-		if (!in_array('image/'.$imageType, $allowedTypes) && !in_array($imageMime, $allowedTypes)) {
-			return 'wrongImageType';
-		}
-
-		if (move_uploaded_file($image, $targetDirectory.$filename.'_main.'.$imageType)) {
-			return true;
-		} else {
-			return 'saveError';
-		}
+		*/
 	}
 }
 
@@ -104,8 +93,7 @@ if (!empty($_POST)) {
 			echo $kitku->get_data($_POST['page']);
 		break;
 		case 'new_post':
-			var_dump($_FILES);
-			echo($kitku->new_post($_POST, $_FILES));
+			echo($kitku->new_post($_POST, $_FILES['new-post-image']));
 		break;
 	}
 	exit();

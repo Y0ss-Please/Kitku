@@ -300,6 +300,7 @@ class Kitku {
 	}
 
 	protected function set_session_cookie($userInfo) {
+		session_destroy();
 		session_regenerate_id();
 		$_SESSION['loggedIn'] = true;
 		$_SESSION['userID'] = $userInfo['id'];
@@ -376,14 +377,14 @@ class Kitku {
 		return $ip;
 	}
 
-	public function dump($var) {
-		echo '<br /><pre style="color: black; background-color: white;">';
-		var_dump($var);
-		echo '</pre><br />';
+	public static function dump($val) {
+		echo '<pre style="background-color: black; color: ivory; padding: 1rem; border-radius: 7px"><h2>DUMP:</h2>';
+		var_dump($val, true);
+		echo '</pre>';
 	}
 }
 
-class KitkuImageUploader {
+class KitkuImage {
 	public $error = false;
 	private $allowedTypes = ['image/png', 'image/gif', 'image/jpg', 'image/jpeg'];
 
@@ -398,53 +399,165 @@ class KitkuImageUploader {
 
 	private $path;
 	private $ext;
-	private $fullsizePath;
+	private $sourceImagePath;
 
-	public function __construct(string $data, string $targetPath, string $filename, string $type = 'path') {
-		if ($type == 'path') {
-			$imageData = getimagesize($data);
-			$this->set_image_data($imageData);
-			$this->rotation = $this->get_rotation($data);
-			$this->image = $this->imagecreate($data, $this->mime);
-		} else if ($type == 'base64') {
-			$imageData = explode(',', $data);
-			$imageBase64 = end($imageData);
-			$imageBin = base64_decode($imageBase64);
-			$this->image = imageCreateFromString($imageBin);
-			$imageData = getimagesizefromstring($imageBin);
+	private $animated;
 
-			if (!$this->image) {
-				$this->error = 'invalidImageString';
-				return false;
-			}
-
-			$this->set_image_data($imageData);
-		}
-
-		$this->ext = '.'.substr($this->mime, 6);
-		$this->path = $targetPath.$filename;
-		$this->fullsizePath = $this->path.'_fullsize'.$this->ext;
-		$this->orientation = $this->get_orientation($this->width, $this->height, $this->rotation);
-		$this->aspectRatio = $this->get_aspect_ratio($this->width, $this->height);
-
-
-		if (!$this->mime_allowed($this->mime)) {
-			$this->error = 'invalidMimeType';
-			return false;
-		}
-
-		if ($this->rotation !== 0) {
-			$this->image = imagerotate($this->image, $this->rotation, 0);
+	public function __destruct() {
+		if (!empty($this->tempFilename) && file_exists($this->tempFilename)) {
+			unlink($this->tempFilename);
 		}
 	}
 
-	public function save_as_uploaded() {
+	public function __construct(string $data, string $targetPath, string $filename, string $type = 'path') {
+		try {
+			if ($type == 'base64') {
+				$base64 = explode(',', $data)[1];
+				$this->tempFilename = $targetPath.'temp-'.time().'-'.rand(100, 999);
+				file_put_contents($this->tempFilename, base64_decode($base64));
+			} else {
+				$this->tempFilename = $data;
+			}
+	
+			$imageData = getimagesize($this->tempFilename);
+			$this->set_image_data($imageData);
+	
+			$this->image = $this->imagecreate($this->tempFilename, $this->mime);
+			
+			$this->rotation = $this->get_rotation($this->tempFilename);
+			$this->orientation = $this->get_orientation($this->width, $this->height, $this->rotation);
+			$this->aspectRatio = $this->get_aspect_ratio($this->width, $this->height);
+	
+			$this->ext = '.'.substr($this->mime, 6);
+			$this->path = $targetPath.$filename;
+			$this->sourceImagePath = $this->path.'_source'.$this->ext;
+	
+			$this->mime_allowed();
+	
+			if ($this->rotation !== 0) {
+				if (abs($this->rotation) === 90) {
+					$tempW = $this->width;
+					$this->width = $this->height;
+					$this->height = $tempW; 
+				}
+				$this->image = imagerotate($this->image, $this->rotation, 0);
+			}
+	
+			$this->animated = $this->is_animated() ? true : false;
+		} catch (Exception $e) {
+			$this->error = $e->getMessage();
+		}
+	}
+
+	public function save_source() {
+		if (!$this->error) {
+			if ($this->animated) {
+				$this->save_animated();
+			} else {
+				rename($this->tempFilename, $this->sourceImagePath);
+			}
+		} else {
+			return false;
+		}
+	}
+
+	public function save_max() {
+		if (!$this->error) {
+			if ($this->animated) {
+				$this->save_animated();
+			} else {
+				$this->save_as($this->image, $this->path.'_max'.$this->ext);
+				return true;
+			}
+		} else {
+			return false;
+		}
+	}
+
+	public function save_reduced(array $sizes) {
+		// Receives an array of target sizes to save the images as.
+		// example ----> 'key' => ['max-x', 'max-y']
+		if (!$this->error) {
+			if ($this->animated) {
+				$this->save_animated();
+			} else {
+				foreach($sizes as $size => $xy) {
+					$x = $xy[0];
+					$y = $xy[1];
+					
+					if ($this->width >= $x || $this->height >= $y){
+						if ($this->orientation < 2) { // if not portrait
+							$newWidth = $x;
+							$newHeight = round($x / $this->aspectRatio);
+						} else { // portrait
+							$newWidth = round($y / $this->aspectRatio);
+							$newHeight = $y;
+						}
+
+						echo "newWidth: ".$newWidth."\r\n";
+						echo "newHeight: ".$newHeight."\r\n";
+	
+						$newImage = imagecreatetruecolor($newWidth, $newHeight);
+						imagecopyresampled($newImage, $this->image, 0, 0, 0, 0, $newWidth, $newHeight, $this->width, $this->height);
+						
+						$this->save_as($newImage, $this->path.'_'.$size.$this->ext);
+					}
+				}
+			}
+		} else {
+			return false;
+		}
+	}
+
+	public function save(array $sizes) {
+		if (!$this->error) {
+			if ($this->animated) {
+				$this->save_max();
+			} else {
+				$this->save_reduced($sizes);
+				$this->save_max();
+				$this->save_source();
+			}
+		} else {
+			return false;
+		}
+	}
+
+	private function save_as($image, $target, $quality = -1) {
 		if ($this->mime == 'image/png' || $this->mime == 'image/gif'){
-			imagealphablending($this->image, false);
-			imagesavealpha($this->image, true);
+			imagealphablending($image, true);
+			imagesavealpha($image, true);
 		}
 		header('Content-Type: '.$this->mime);
-		$this->imagefrom($this->fullsizePath, 100);
+		$this->imagefrom($image, $target, $quality);
+	}
+
+	private function save_animated() {
+		// Manipulating animated gifs may come at a future date. For now save them exactly as uploaded.
+		if (!file_exists ($this->sourceImagePath)) {
+			rename($this->tempFilename, $this->sourceImagePath);
+		}
+	}
+
+	private function imagefrom($image, $targetPath, int $quality = -1) {
+		switch (substr($this->mime, 6)) {
+			case 'jpeg':
+			case 'jpg':
+				return imagejpeg($image, $targetPath, $quality);
+			break;
+			case 'png':
+				return imagepng($image, $targetPath);
+			break;
+			case 'gif':
+				return imagegif($image, $targetPath);
+			break;
+		}
+	}
+
+	private function set_image_data($imageData) {
+		$this->width = $imageData[0];
+		$this->height = $imageData[1];
+		$this->mime = $imageData['mime'];
 	}
 
 	private function imagecreate($path, $mime) {
@@ -458,21 +571,6 @@ class KitkuImageUploader {
 			break;
 			case 'gif':
 				return imagecreatefromgif($path);
-			break;
-		}
-	}
-
-	private function imagefrom($targetPath, int $quality = null) {
-		switch (substr($this->mime, 6)) {
-			case 'jpeg':
-			case 'jpg':
-				return imagejpeg($this->image, $targetPath, $quality);
-			break;
-			case 'png':
-				return imagepng($this->image, $targetPath);
-			break;
-			case 'gif':
-				return imagegif($this->image, $targetPath);
 			break;
 		}
 	}
@@ -520,23 +618,48 @@ class KitkuImageUploader {
 			$big = $height;
 			$small = $width;
 		}
-		return round($big/$small, 4);
+		return round($big/$small, 6);
 	}
 
-	private function base64_temp_image($imageString, $targetPath, $filename) {
-		
-
-		return $output;
+	private function mime_allowed() {
+		if (!in_array($this->mime, $this->allowedTypes)) {
+			throw new Exception('Mime type not allowed');
+		}
 	}
 
-	private function mime_allowed($mime) {
-		return (in_array($mime, $this->allowedTypes) ? true : false );
+	function is_animated() {
+		$filecontents = file_get_contents($this->tempFilename);
+
+		$str_loc = 0;
+		$count = 0;
+		while ($count < 2) {
+			$where1=strpos($filecontents,"\x00\x21\xF9\x04",$str_loc);
+			if ($where1 === FALSE) {
+				break;
+			} else {
+				$str_loc=$where1+1;
+				$where2=strpos($filecontents,"\x00\x2C",$str_loc);
+				if ($where2 === FALSE) {
+					break;
+				} else {
+				if ($where1+8 == $where2) {
+					$count++;
+				}
+				$str_loc=$where2+1;
+				}
+			}
+		}
+
+		if ($count > 1) {
+		return(true);
+
+		} else {
+			return(false);
+		}
 	}
 
-	private function set_image_data($imageData) {
-		$this->width = $imageData[0];
-		$this->height = $imageData[1];
-		$this->mime = $imageData['mime'];
+	public function get_error() {
+		return $this->error;
 	}
 }
 

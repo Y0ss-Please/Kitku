@@ -21,7 +21,7 @@ class KitkuInstaller extends Kitku {
 				'home' => $this->home,
 				'imageMaxSizes' => $imageMaxSizes,
 				'configIgnores' => ['conn', 'dbError', 'currentPath'], // Object variables NOT stored in config.json
-				'buildTableIgnores' => ['id', 'content'], // Columns ignored by build_table() in admin javascript
+				'buildTableIgnores' => ['id', 'urlTitle', 'content'], // Columns ignored by build_table() in admin javascript
 				'buildTableToggles' => ['blogPage', 'showInMenu'] // Columns displayed as a toggle by build_table() in admin javascript
 			];
 			$this->set_config(true, $defaultConfig);

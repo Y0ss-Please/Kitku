@@ -148,13 +148,26 @@ function change_page(page) {
 }
 
 function new_post() {
+
     
     const form = document.forms['new-post'];
     if (!form['new-post-title'].value) return false ;
 
     const fd = new FormData(form);
-    fd.append('new-post-content', newPost.root.innerHTML);
     fd.append('func', 'new_post')
+
+    const imageElements = newPost.root.querySelectorAll('img');
+
+    let i = 0;
+    const images = {};
+    imageElements.forEach(element => {
+        images['image_'+i] = element.src;
+        element.src = 'image_'+i;
+        i++;
+    });
+
+    fd.append('images', JSON.stringify(images));
+    fd.append('new-post-content', newPost.root.innerHTML);
 
     const xhttp = new XMLHttpRequest();
             xhttp.open('POST', installUrl+'admin.php', true);
