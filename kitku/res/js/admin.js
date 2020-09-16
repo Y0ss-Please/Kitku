@@ -161,7 +161,7 @@ function new_post() {
     let i = 0;
     const images = {};
     imageElements.forEach(element => {
-        images['image_'+i] = element.src;
+        images['image-'+i] = element.src;
         element.src = 'image_'+i;
         i++;
     });
@@ -184,6 +184,12 @@ function new_post() {
             }
         }
     }
+
+    i = 0;
+    imageElements.forEach(element => {
+        element.src = images['image-'+i];
+        i++;
+    });
 }
 
 function logout() {

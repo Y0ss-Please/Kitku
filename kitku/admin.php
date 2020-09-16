@@ -32,6 +32,7 @@ class Admin extends Kitku {
 	}
 
 	public function new_post(array $postData, array $imageData) {
+
 		$purifier = new HTMLPurifier();
 
 		// make urlTitle, check if title or urlTitle are used already.
@@ -44,9 +45,20 @@ class Admin extends Kitku {
 		$tags = $_POST['new-post-tags'];
 		$category = $_POST['new-post-category'];
 
+		$imagePath = $this->home['server'].'images/'.$urlTitle.'/';
+		if (!file_exists($imagePath)) {
+			mkdir($imagePath);
+		}
 		$images = json_decode($postData['images']);
-		var_dump($images);
-		$imageMain = new KitkuImage($imageData['tmp_name'], $this->home['server'].'images/', $urlTitle);
+		foreach($images as $key => $value) {
+			$image = new KitkuImage($value, $imagePath, $key);
+			if ($image->error) {
+				return $image->error.' on '.$key;
+			} else {
+				$image->save($this->imageMaxSizes);
+			}
+		}
+		$imageMain = new KitkuImage($imageData['tmp_name'], $imagePath, 'main');
 		if ($imageMain->error) {
 			return $image->error;
 		} else {
@@ -66,13 +78,11 @@ class Admin extends Kitku {
 			'content' => $content
 		];
 
-		/*
 		if ($this->insert('posts', $insert)) {
 			return true;
 		} else {
 			return 'serverError';
 		}
-		*/
 	}
 }
 

@@ -277,7 +277,9 @@ class Kitku {
 					$this->destroy_cookies();
 					return false;
 				}
-				$this->login($user[0]['username'], $user[0]['password'], true, false);
+				$userInfo = $this->get_user_info($user[0]['username']);
+				$this->set_session_cookie($userInfo);
+				$this->set_auth_cookie($userInfo); 
 				return true;
 			}		
 		}
@@ -300,7 +302,6 @@ class Kitku {
 	}
 
 	protected function set_session_cookie($userInfo) {
-		session_destroy();
 		session_regenerate_id();
 		$_SESSION['loggedIn'] = true;
 		$_SESSION['userID'] = $userInfo['id'];
@@ -454,7 +455,7 @@ class KitkuImage {
 			if ($this->animated) {
 				$this->save_animated();
 			} else {
-				rename($this->tempFilename, $this->sourceImagePath);
+				copy($this->tempFilename, $this->sourceImagePath);
 			}
 		} else {
 			return false;
@@ -484,19 +485,25 @@ class KitkuImage {
 				foreach($sizes as $size => $xy) {
 					$x = $xy[0];
 					$y = $xy[1];
-					
-					if ($this->width >= $x || $this->height >= $y){
-						if ($this->orientation < 2) { // if not portrait
-							$newWidth = $x;
-							$newHeight = round($x / $this->aspectRatio);
-						} else { // portrait
-							$newWidth = round($y / $this->aspectRatio);
-							$newHeight = $y;
-						}
 
-						echo "newWidth: ".$newWidth."\r\n";
-						echo "newHeight: ".$newHeight."\r\n";
-	
+					if ($this->width >= $x || $this->height >= $y){
+						if ($this->orientation < 2) { // if not portrait, x priority
+							if ($this->width > $x) {
+								$newWidth = $x;
+								$newHeight = round($x / $this->aspectRatio);
+							} else if ($this->height >= $y) {
+								$newWidth = round($y / $this->aspectRatio);
+								$newHeight = $y;
+							}
+						} else { // portrait, y priority
+							if ($this->height >= $y) {
+								$newWidth = round($y / $this->aspectRatio);
+								$newHeight = $y;
+							} else if ($this->width > $x) {
+								$newWidth = $x;
+								$newHeight = round($x / $this->aspectRatio);
+							}
+						}
 						$newImage = imagecreatetruecolor($newWidth, $newHeight);
 						imagecopyresampled($newImage, $this->image, 0, 0, 0, 0, $newWidth, $newHeight, $this->width, $this->height);
 						
@@ -535,7 +542,7 @@ class KitkuImage {
 	private function save_animated() {
 		// Manipulating animated gifs may come at a future date. For now save them exactly as uploaded.
 		if (!file_exists ($this->sourceImagePath)) {
-			rename($this->tempFilename, $this->sourceImagePath);
+			copy($this->tempFilename, $this->sourceImagePath);
 		}
 	}
 
