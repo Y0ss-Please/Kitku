@@ -266,6 +266,7 @@ input[type="password"],
 form > select {
 	background-color: var(--grey-3);
 	border: 1px solid var(--grey-2);
+	width: 100%;
 	max-width: 35em;
 }
 
@@ -296,6 +297,48 @@ button, input[type="submit"], input[type="reset"] {
 
 #remember-container>input {
 	margin: 0 0 0 0.5rem;
+}
+
+#new-post-tags-container {
+	max-width: 35em;
+}
+
+.add-tag{
+	display: inline-block;
+	margin: 0.5em 0.5em 0 0;
+	padding: 0.2em 0.3em;
+	border-radius: 5px;
+	font-size: 80%;
+	background-color: var(--grey-3);
+	color: var(--teal-3);
+	cursor: pointer;
+}
+
+#new-post-category-container {
+	position: relative;
+}
+
+#category-dropdown {
+	z-index: 5;
+	position: absolute;
+	left: 0;
+	top: 100%;
+	background-color: var(--grey-3);
+	border: 1px solid var(--grey-2);
+}
+
+#category-dropdown > div {
+	cursor: pointer;
+	padding: 0.2em 1em;
+	margin-bottom: 0.2em;
+}
+
+#category-dropdown > div:hover {
+	background-color: var(--grey-2);
+}
+
+#category-dropdown > div:last-of-type {
+	margin-bottom: 0;
 }
 
 /* -- Buttons -- */

@@ -1,5 +1,8 @@
 import * as name from "./quill.js";
 
+var tags = [];
+var categories = [];
+
 const newPost = new Quill('#post-editor', {
     modules: {
         toolbar: [
@@ -142,6 +145,94 @@ function change_page(page) {
                 const element = document.querySelector('.icon-'+icon).cloneNode(true);
                     element.classList.remove('hidden');
                 return element;
+            }
+        } else if (page == 'new-post') {
+            const xhttp = new XMLHttpRequest();
+                xhttp.open('POST', installUrl+'admin.php', true);
+                xhttp.setRequestHeader('Content-type', 'application/x-www-form-urlencoded');
+                xhttp.send(`func=get_data&page=${page}`);
+    
+            xhttp.onreadystatechange = function() {
+                if (this.readyState == 4 && this.status == 200){
+                    result = JSON.parse(this.responseText);
+                    tags = result[0];
+                    categories = result[1];
+
+                    tags = tags.slice(0, 10);
+                    const tagsElement = document.getElementById('new-post-tags');
+                    const tagsContainer = document.getElementById('new-post-tags-container');
+                    let fragment = document.createDocumentFragment();
+                    tags.forEach( (tag) => {
+                        const newTag = document.createElement('div');
+                        newTag.classList.add('add-tag');
+                        newTag.textContent = '+'+tag;
+                        fragment.appendChild(newTag);
+
+                        newTag.addEventListener('click', (e) => {
+                            if (tagsElement.value) {
+                                tagsElement.value += ', ';
+                            }
+                            tagsElement.value += e.target.textContent.substring(1);
+                        });
+                    });
+
+                    tagsContainer.appendChild(fragment);
+
+                    fragment = document.createDocumentFragment();
+                    const categoryElement = document.getElementById('new-post-category')
+                    const categoryDropdown = document.getElementById('category-dropdown');
+
+                    categoryElement.addEventListener('focus', (e) => {
+                        e.stopPropagation();
+                        populate_category_dropdown();
+                        categoryElement.addEventListener('keyup', key_refresh);
+                    });
+
+                    const key_refresh = function(e) {
+                        populate_category_dropdown();
+                    }
+
+                    const close = function(e) {
+                        categoryDropdown.classList.add('hidden');
+                        categoryElement.removeEventListener('focusout', close);
+                        categoryElement.removeEventListener('keyup', key_refresh);
+                    }
+                    categoryElement.addEventListener('focusout', close);
+                    
+                    function populate_category_dropdown() {
+                        categoryDropdown.classList.remove('hidden');
+
+                        if (categories) {
+                            categoryDropdown.innerHTML = '';
+                            categories.forEach((category) => {
+                                let match = true;
+
+                                if (categoryElement.value) {
+                                    for(let i=0; i<categoryElement.value.length; i++) {
+                                        if (category.charAt(i).toLowerCase() != categoryElement.value.charAt(i).toLowerCase()) {
+                                            match = false;
+                                            i = categoryElement.value.length;
+                                        } else {
+                                            match = true;
+                                        }
+                                    }
+                                }
+
+                                if (match) {
+                                    const newCategory = document.createElement('div');
+                                    newCategory.textContent = category;
+                                    fragment.appendChild(newCategory);
+        
+                                    newCategory.addEventListener('click', (e) => {
+                                        categoryElement.value = e.target.textContent;
+                                    });
+                                }
+                            });
+
+                            categoryDropdown.appendChild(fragment);
+                        }
+                    }
+                }
             }
         }
     }

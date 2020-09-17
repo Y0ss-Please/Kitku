@@ -4,6 +4,9 @@ require_once 'kitku.php';
 require_once 'res\htmlpurifier-4.13.0\library\HTMLPurifier.auto.php';
 
 class Admin extends Kitku {
+	public $categories = [];
+	public $tags = [];
+
 	function __construct() {
 		parent::__construct();
 		if ($this->installed !== true) {
@@ -17,8 +20,10 @@ class Admin extends Kitku {
 	}
 
 	public function get_data($data) {
+
 		switch ($data) {
-			case ('posts' || 'pages'):
+			case 'posts':
+			case 'pages':
 				$allPosts = $this->select('*', $data);
 				foreach ($allPosts as $key => $value) {
 					if (!empty($allPosts[$key]['date'])) {
@@ -26,6 +31,39 @@ class Admin extends Kitku {
 					}
 				}
 				return (json_encode($allPosts, JSON_PRETTY_PRINT));
+			break;
+			case 'new-post':
+				$tagsArray = $this->select('tags', 'posts');
+				$everyTag = [];
+				foreach($tagsArray as $arr) {
+					foreach($arr as $key => $value) {
+						$values = explode(',', $value);
+						foreach($values as $value) {
+							if ($value != ' ' && $value != '') {
+							array_push($everyTag, trim($value));
+
+							}
+						}
+					}
+				}
+				$frequency = array_count_values($everyTag);
+				arsort($frequency);
+				foreach($frequency as $key => $value) {
+					array_push($this->tags, $key);
+				}
+
+				$categoriesArray = $this->select('category', 'posts');
+				for($i=0; $i<count($categoriesArray); $i++) {
+					foreach($categoriesArray[$i] as $key => $value) {
+						if (!in_array($value, $this->categories)) {
+							if ($value != '' && $value != ' ') {
+								array_push($this->categories, $value);
+							}
+						}
+					}
+				}
+				sort($this->categories);
+				return json_encode([$this->tags, $this->categories]);
 			break;
 		}
 		return false;
@@ -36,14 +74,23 @@ class Admin extends Kitku {
 		$purifier = new HTMLPurifier();
 
 		// make urlTitle, check if title or urlTitle are used already.
-		$title = $purifier->purify($postData['new-post-title']);
+		$title = trim($postData['new-post-title']);
+		$title = $purifier->purify($title);
+
 		$urlTitle = $this->strip_special_chars($title);
+
 		if ($this->select(['title'], 'posts', ['title='.$title, 'urlTitle='.$urlTitle], 'OR')) {
 			return 'titleTaken';
 		}
 
 		$tags = $_POST['new-post-tags'];
-		$category = $_POST['new-post-category'];
+		$tags = strtolower($tags);
+		$tags = trim($tags);
+		$tags = preg_replace('/,\s*/', ', ', $tags);
+		$tags = str_replace(' ', '-', $tags);
+
+		$category = trim($_POST['new-post-category']);
+		$category = $purifier->purify($category);
 
 		$imagePath = $this->home['server'].'images/'.$urlTitle.'/';
 		if (!file_exists($imagePath)) {
@@ -86,7 +133,7 @@ class Admin extends Kitku {
 	}
 }
 
-$kitku = $kitku ?? new Admin();
+$kitku = new Admin();
 
 if ($kitku->check_login() !== true) {
 	$kitku->demand_login('admin');
@@ -140,10 +187,6 @@ include $kitku->home['installServer'].'res/header.php';
 				<div data-page="pages" data-children="new-page" class="navbar-item">
 					<svg width="24" height="24" viewBox="0 0 1000 1000" xmlns="http://www.w3.org/2000/svg"><path d=" M 200 166C 200 166 200 166 200 166C 204 129 238 98 275 99C 375 99 475 100 575 100C 575 168 574 236 576 304C 582 330 612 323 632 324C 632 324 798 324 798 324C 799 493 800 663 800 833C 796 876 753 905 711 900C 563 900 415 901 267 900C 224 896 195 853 200 811C 200 596 200 381 200 166M 625 100C 625 100 625 100 625 100C 631 101 637 103 641 107C 692 157 743 206 794 256C 802 267 800 275 800 275C 742 276 683 275 625 275C 625 275 625 100 625 100"/></svg>
 					<div>pages</div>
-				</div>
-				<div data-page="plugins" class="navbar-item">
-					<svg width="24" height="24" viewBox="0 0 1000 1000" xmlns="http://www.w3.org/2000/svg"><path d=" M 644 563C 644 563 806 563 806 563C 826 563 843 579 843 599C 843 599 843 602 843 602C 843 622 826 638 806 638C 806 638 644 638 644 638C 644 638 644 563 644 563M 644 363C 644 363 806 363 806 363C 826 363 843 379 843 399C 843 399 843 402 843 402C 843 422 826 438 806 438C 806 438 644 438 644 438C 644 438 644 363 644 363M 382 300C 382 300 557 300 557 300C 585 300 607 322 607 350C 607 350 607 650 607 650C 607 678 585 700 557 700C 557 700 382 700 382 700C 299 700 232 633 232 550C 232 550 157 550 157 550C 157 550 157 450 157 450C 157 450 232 450 232 450C 232 367 299 300 382 300C 382 300 382 300 382 300" transform="rotate(180,500,500)"/></svg>
-					<div>plugins</div>
 				</div>
 				<div data-page="settings" class="navbar-item">
 					<svg width="24" height="24" viewBox="0 0 1000 1000" xmlns="http://www.w3.org/2000/svg"><path d=" M 500 328C 500 328 500 328 500 328C 405 328 328 405 328 500C 328 595 405 672 500 672C 595 672 672 595 672 500C 672 405 595 328 500 328M 463 101C 463 101 463 101 463 101C 463 101 534 101 534 101C 558 101 578 118 582 142C 582 142 592 198 592 198C 611 203 630 211 648 221C 648 221 694 188 694 188C 713 174 739 177 758 193C 758 193 807 243 807 243C 825 260 827 287 813 306C 813 306 780 352 780 352C 789 370 796 388 802 407C 802 407 858 416 858 416C 882 420 899 441 899 465C 899 465 899 535 899 535C 899 559 882 580 858 584C 858 584 802 593 802 593C 796 612 789 630 779 648C 779 648 812 694 812 694C 826 714 824 740 807 757C 807 757 757 807 757 807C 741 822 714 826 694 812C 694 812 648 779 648 779C 630 789 612 796 593 802C 593 802 584 858 584 858C 580 882 559 899 535 899C 535 899 465 899 465 899C 441 899 420 882 416 858C 416 858 407 802 407 802C 389 796 371 789 354 780C 354 780 307 814 307 814C 288 827 263 825 244 808C 244 808 194 759 194 759C 177 742 175 715 189 695C 189 695 222 649 222 649C 212 632 205 614 199 595C 199 595 142 586 142 586C 118 582 101 561 101 537C 101 537 101 467 101 467C 101 442 118 422 142 418C 142 418 197 409 197 409C 203 390 210 372 220 354C 220 354 186 307 186 307C 172 288 175 261 192 244C 192 244 241 194 241 194C 257 179 285 175 305 189C 305 189 351 222 351 222C 368 212 386 205 405 199C 405 199 415 142 415 142C 419 118 439 101 463 101"/></svg>
@@ -211,10 +254,6 @@ include $kitku->home['installServer'].'res/header.php';
 				</div>
 			</div>
 
-			<div data-page="plugins" class="main-content">
-				<h2>One day there will be plugins</h2>
-			</div>
-
 			<div data-page="settings"class="main-content">
 				<h2>A setting page, eventually...</h2>
 			</div>
@@ -230,13 +269,20 @@ include $kitku->home['installServer'].'res/header.php';
 						<div id="new-post-button" class="button">Upload</div>
 					</div>
 					<hr />
-						<form name="new-post" class="form-new-post form-grid" onsubmit="return false">
+						<form name="new-post" class="form-new-post form-grid" autocomplete="off" onsubmit="return false">
 							<label for="new-post-title">Title: </label>
 							<input type="text" name="new-post-title" required></input>
 							<label for="new-post-tags">Tags: </label>
-							<input type="text" name="new-post-tags" placeholder="Seperated by commas. Letters and numbers only."></input>
+							<div>
+								<input id="new-post-tags" type="text" name="new-post-tags" placeholder="Seperated by commas. Letters and numbers only."></input>
+								<div id="new-post-tags-container">
+								</div>
+							</div>
 							<label for="new-post-category">Category: </label>
-							<input type="text" name="new-post-category"></input>
+							<div id="new-post-category-container">
+								<input id="new-post-category" type="text" name="new-post-category"></input>
+								<div id="category-dropdown" class="hidden"></div>
+							</div>
 							<label for="new-post-image">Post Image: </label>
 							<input type="file" name="new-post-image" accept="image/png, image/jpeg, image/gif"></input>
 							<input id="new-post-submit" class="hidden" type="submit"></input>
