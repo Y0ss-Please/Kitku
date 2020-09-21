@@ -455,14 +455,19 @@ function populate_active_page(page) {
                     if (!buildTableIgnores.includes(val)){
                         const td = document.createElement('td');
                         td.setAttribute('data-postIndex', i);
-                        td.textContent = e[val];
 
                         if (val == 'title') {
                             const link = document.createElement('a');
                             link.href = homeUrl+urlTitle;
-                            link.textContent = td.textContent;
+                            link.textContent = e[val];
+                            td.classList.add('table-title');
                             td.innerHTML = '';
                             td.appendChild(link);
+                        } else if (val == 'tags') {
+                            const tags = e[val].replace(/,/g, ', ');
+                            td.textContent = tags;
+                        } else {
+                            td.textContent = e[val];
                         }
 
                         tr.appendChild(td);
@@ -528,6 +533,16 @@ function build_listners() {
     editorButton.addEventListener('click', () => {
         editorSubmit.click()
         editor.upload();
+    });
+
+    const close_nav = function() {
+        document.getElementById('navbar').setAttribute('style', 'left: -100vw;')
+        window.removeEventListener('click', close_nav);
+    }
+    document.getElementById('hamburger-menu').addEventListener('click', (e) => {
+        e.stopPropagation();
+        document.getElementById('navbar').setAttribute('style', 'left: 0;')
+        window.addEventListener('click', close_nav);
     });
 }
 

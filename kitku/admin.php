@@ -207,7 +207,7 @@ class Admin extends Kitku {
 		$tags = strtolower($tags);
 		$tags = trim($tags);
 		$tags = preg_replace('/,\s*/', ',', $tags);
-		return str_replace(' ', '-', $tags);
+		return $tags;
 	}
 
 	private function handle_category($category) {
@@ -339,30 +339,33 @@ include $kitku->home['installServer'].'res/header.php';
 </script>
 
 <body>
+	<div id="hamburger-menu">
+		<svg width="32" height="32" viewBox="0 0 1000 1000" xmlns="http://www.w3.org/2000/svg"><path d=" M 200 688C 200 688 800 688 800 688C 823 687 844 699 855 718C 866 738 866 762 855 782C 844 801 823 813 800 812C 800 812 200 812 200 812C 177 813 156 801 145 782C 134 762 134 738 145 718C 156 699 177 687 200 688C 200 688 200 688 200 688M 200 437C 200 437 800 437 800 437C 823 437 844 449 855 468C 866 488 866 512 855 532C 844 551 823 563 800 563C 800 563 200 563 200 563C 177 563 156 551 145 532C 134 512 134 488 145 468C 156 449 177 437 200 437C 200 437 200 437 200 437M 200 188C 200 188 800 188 800 188C 823 187 844 199 855 218C 866 238 866 262 855 282C 844 301 823 313 800 312C 800 312 200 312 200 312C 177 313 156 301 145 282C 134 262 134 238 145 218C 156 199 177 187 200 188C 200 188 200 188 200 188"/></svg>
+	</div>
 
 	<div id="admin">
 
-		<div id="navbar">
+		<div id="navbar" class="mobile-hide">
 
-			<img id="kitku-logo" class="navbar-logo" width="64px" height="64px" src="<?= $kitku->home['installUrl'].'res/images/logo.png' ?>" />
+			<img id="kitku-logo" class="navbar-logo" src="<?= $kitku->home['installUrl'].'res/images/logo.png' ?>" />
 
 			<div id="navbar-item-container">
 
 				<div data-page="home" class="navbar-item active">
 					<svg width="24" height="24" viewBox="0 0 1000 1000" xmlns="http://www.w3.org/2000/svg"><path d=" M 500 75C 514 75 528 82 540 94C 540 94 950 504 950 504C 960 514 960 519 950 529C 950 529 915 564 915 564C 905 574 895 574 885 564C 885 564 515 194 515 194C 505 184 495 184 485 194C 485 194 115 564 115 564C 105 574 95 574 85 564C 85 564 50 529 50 529C 40 519 40 514 50 504C 50 504 135 419 135 419C 145 409 150 399 150 389C 150 389 150 267 150 267C 150 267 150 154 150 154C 150 139 160 129 175 129C 175 129 300 129 300 129C 315 129 326 139 325 154C 325 154 325 229 325 229C 325 229 460 94 460 94C 472 82 486 75 500 75C 500 75 500 75 500 75M 500 236C 505 236 510 239 515 244C 515 244 835 564 835 564C 845 574 850 579 850 594C 850 594 850 879 850 879C 850 914 835 929 800 929C 800 929 600 929 600 929C 590 929 575 914 575 904C 575 904 575 754 575 754C 575 739 565 729 550 729C 550 729 450 729 450 729C 435 729 425 739 425 754C 425 754 425 904 425 904C 425 914 410 929 400 929C 400 929 200 929 200 929C 165 929 150 914 150 879C 150 879 150 594 150 594C 150 579 155 574 165 564C 165 564 485 244 485 244C 490 239 495 236 500 236C 500 236 500 236 500 236"/></svg>
-					<div>home</div>
+					<div class="navbar-content">home</div>
 				</div>
 				<div data-page="posts" data-children="new-post" class="navbar-item">
 					<svg width="24" height="24" viewBox="0 0 1000 1000" xmlns="http://www.w3.org/2000/svg"><path d=" M 725 88C 746 88 762 104 763 125C 763 125 763 188 763 188C 763 242 725 287 675 287C 675 287 641 287 641 287C 641 287 659 466 659 466C 690 473 717 489 734 513C 756 544 763 583 763 625C 762 646 746 662 725 663C 725 663 600 663 600 663C 600 663 563 663 563 663C 563 663 437 663 437 663C 437 663 400 663 400 663C 400 663 275 663 275 663C 254 662 238 646 238 625C 238 583 244 544 266 513C 283 489 310 473 341 466C 341 466 359 287 359 287C 359 287 325 287 325 287C 300 287 279 276 264 261C 249 246 238 225 238 200C 238 158 238 167 238 125C 238 104 254 88 275 88C 275 88 725 88 725 88M 563 710C 563 710 563 850 563 850C 563 856 561 862 559 867C 559 867 534 917 534 917C 527 929 514 937 500 937C 486 937 473 929 466 917C 466 917 441 867 441 867C 439 862 438 856 437 850C 437 850 437 710 437 710C 437 710 563 710 563 710"/></svg>
-					<div>posts</div>
+					<div class="navbar-content">posts</div>
 				</div>
 				<div data-page="pages" data-children="new-page" class="navbar-item">
 					<svg width="24" height="24" viewBox="0 0 1000 1000" xmlns="http://www.w3.org/2000/svg"><path d=" M 200 166C 200 166 200 166 200 166C 204 129 238 98 275 99C 375 99 475 100 575 100C 575 168 574 236 576 304C 582 330 612 323 632 324C 632 324 798 324 798 324C 799 493 800 663 800 833C 796 876 753 905 711 900C 563 900 415 901 267 900C 224 896 195 853 200 811C 200 596 200 381 200 166M 625 100C 625 100 625 100 625 100C 631 101 637 103 641 107C 692 157 743 206 794 256C 802 267 800 275 800 275C 742 276 683 275 625 275C 625 275 625 100 625 100"/></svg>
-					<div>pages</div>
+					<div class="navbar-content">pages</div>
 				</div>
 				<div data-page="settings" class="navbar-item">
 					<svg width="24" height="24" viewBox="0 0 1000 1000" xmlns="http://www.w3.org/2000/svg"><path d=" M 500 328C 500 328 500 328 500 328C 405 328 328 405 328 500C 328 595 405 672 500 672C 595 672 672 595 672 500C 672 405 595 328 500 328M 463 101C 463 101 463 101 463 101C 463 101 534 101 534 101C 558 101 578 118 582 142C 582 142 592 198 592 198C 611 203 630 211 648 221C 648 221 694 188 694 188C 713 174 739 177 758 193C 758 193 807 243 807 243C 825 260 827 287 813 306C 813 306 780 352 780 352C 789 370 796 388 802 407C 802 407 858 416 858 416C 882 420 899 441 899 465C 899 465 899 535 899 535C 899 559 882 580 858 584C 858 584 802 593 802 593C 796 612 789 630 779 648C 779 648 812 694 812 694C 826 714 824 740 807 757C 807 757 757 807 757 807C 741 822 714 826 694 812C 694 812 648 779 648 779C 630 789 612 796 593 802C 593 802 584 858 584 858C 580 882 559 899 535 899C 535 899 465 899 465 899C 441 899 420 882 416 858C 416 858 407 802 407 802C 389 796 371 789 354 780C 354 780 307 814 307 814C 288 827 263 825 244 808C 244 808 194 759 194 759C 177 742 175 715 189 695C 189 695 222 649 222 649C 212 632 205 614 199 595C 199 595 142 586 142 586C 118 582 101 561 101 537C 101 537 101 467 101 467C 101 442 118 422 142 418C 142 418 197 409 197 409C 203 390 210 372 220 354C 220 354 186 307 186 307C 172 288 175 261 192 244C 192 244 241 194 241 194C 257 179 285 175 305 189C 305 189 351 222 351 222C 368 212 386 205 405 199C 405 199 415 142 415 142C 419 118 439 101 463 101"/></svg>
-					<div>settings</div>
+					<div class="navbar-content">settings</div>
 				</div>
 
 			</div>
@@ -370,7 +373,7 @@ include $kitku->home['installServer'].'res/header.php';
 			<a class="dummy-link" href="https://github.com/Y0ss-Please/Kitku">
 				<div data-page="github" class="navbar-item">
 					<svg width="24" height="24" viewBox="0 0 1000 1000" xmlns="http://www.w3.org/2000/svg"><path d=" M 500 0C 500 0 500 0 500 0C 776 0 1000 224 1000 500C 1000 720 857 908 659 974C 634 979 625 963 625 950C 625 933 626 879 626 813C 626 766 610 736 592 720C 703 708 820 665 820 473C 820 418 801 374 769 339C 774 327 791 275 764 207C 764 207 722 193 626 258C 586 247 544 241 501 241C 459 241 416 247 376 258C 281 194 239 207 239 207C 211 275 229 327 234 339C 202 374 183 419 183 473C 183 665 299 708 410 720C 396 733 383 755 378 787C 349 800 278 821 233 746C 223 731 195 694 156 695C 114 695 139 718 156 728C 178 740 202 784 208 798C 218 826 250 880 376 857C 376 899 376 938 376 950C 376 963 367 978 342 974C 143 908 0 721 0 500C 0 224 224 0 500 0"/></svg>
-					<div>github</div>
+					<div class="navbar-content">github</div>
 				</div>
 			</a>
 
@@ -408,7 +411,7 @@ include $kitku->home['installServer'].'res/header.php';
 					<div data-page="editor" class="button new-button">New Post</div>
 				</div>
 				<hr>
-				<div class="table-container"">
+				<div class="table-container">
 					<table id="posts-table">
 						<thead>
 							<tr>
@@ -458,11 +461,11 @@ include $kitku->home['installServer'].'res/header.php';
 						<label for="editor-title">Title: </label>
 						<input id="editor-title" type="text" name="editor-title" required></input>
 						<label for="editor-tags">Tags: </label>
-						<div>
+						<span>
 							<input id="editor-tags" type="text" name="editor-tags" placeholder="Seperated by commas. Letters and numbers only." onfocus="this.value =  this.value"></input>
 							<div id="editor-tags-container">
 							</div>
-						</div>
+						</span>
 						<label for="editor-category">Category: </label>
 						<div id="editor-category-container">
 							<input id="editor-category" type="text" name="editor-category"></input>
@@ -488,15 +491,6 @@ include $kitku->home['installServer'].'res/header.php';
 					</div>
 				</div>
 			</div>
-
-			<div data-page="new-page" class="main-content">
-				<h2>New Page Page!</h2>
-				<hr />
-				<div class="editor-container">
-					<div class="editor" id="page-editor"></div>
-				</div>
-			</div>
-
 		</div>
 	</div>
 
