@@ -4,11 +4,18 @@ require_once 'kitku.php';
 require_once 'res\htmlpurifier-4.13.0\library\HTMLPurifier.auto.php';
 
 class Admin extends Kitku {
+
+	public $tags =[] ;
 	public $categories = [];
-	public $tags = [];
+
+	private $purifier;
+	private $imagePath;
 
 	function __construct() {
 		parent::__construct();
+
+		$this->imagePath = $this->home['server'].'images/';
+
 		if ($this->installed !== true) {
 			$this->redirect_url();
 			exit();
@@ -19,7 +26,7 @@ class Admin extends Kitku {
 		parent::__destruct();
 	}
 
-	public function get_data($data) {
+	public function get_data($data, $target = null) {
 
 		switch ($data) {
 			case 'posts':
@@ -32,7 +39,7 @@ class Admin extends Kitku {
 				}
 				return (json_encode($allPosts, JSON_PRETTY_PRINT));
 			break;
-			case 'new-post':
+			case 'editor':
 				$tagsArray = $this->select('tags', 'posts');
 				$everyTag = [];
 				foreach($tagsArray as $arr) {
@@ -65,17 +72,37 @@ class Admin extends Kitku {
 				sort($this->categories);
 				return json_encode([$this->tags, $this->categories]);
 			break;
+			default:
+				$info = $this->select('*', 'pages', 'urlTitle='.$data);
+				if (!$info) {
+					$info = $this->select('*', 'posts', 'urlTitle='.$data);
+				}
+
+				$mainImage = $this->get_smallest_main_image($data);
+				if ($mainImage) {
+					$info[0]['mainImage'] = str_replace($this->imagePath, '', $mainImage);
+				}
+
+				$contentData = $this->get_content_data($data);
+				$images = $contentData[0];
+				$imgSrc = $contentData[1];
+				$content = $contentData[2];
+
+				for($i = 0; $i < count($contentData[1]); $i++) {
+					$content = str_replace($imgSrc[$i], '<img src="'.$images[trim(substr($imgSrc[$i], 9),'"')]['source'].'"', $content);
+				}
+
+				$info[0]['content'] = $content;
+
+				return ($info) ? json_encode($info[0]) : false;
+			break;
 		}
 		return false;
 	}
 
 	public function new_post(array $postData, array $imageData) {
-
-		$purifier = new HTMLPurifier();
-
-		// make urlTitle, check if title or urlTitle are used already.
-		$title = trim($postData['new-post-title']);
-		$title = $purifier->purify($title);
+		
+		$title = $this->handle_title($postData['editor-title']);
 
 		$urlTitle = $this->strip_special_chars($title);
 
@@ -83,36 +110,17 @@ class Admin extends Kitku {
 			return 'titleTaken';
 		}
 
-		$tags = $_POST['new-post-tags'];
-		$tags = strtolower($tags);
-		$tags = trim($tags);
-		$tags = preg_replace('/,\s*/', ', ', $tags);
-		$tags = str_replace(' ', '-', $tags);
+		$tags = $this->handle_tags($postData['editor-tags']);
 
-		$category = trim($_POST['new-post-category']);
-		$category = $purifier->purify($category);
+		$category = $this->handle_category($postData['editor-category']);
 
-		$imagePath = $this->home['server'].'images/'.$urlTitle.'/';
-		if (!file_exists($imagePath)) {
-			mkdir($imagePath);
-		}
-		$images = json_decode($postData['images']);
-		foreach($images as $key => $value) {
-			$image = new KitkuImage($value, $imagePath, $key);
-			if ($image->error) {
-				return $image->error.' on '.$key;
-			} else {
-				$image->save($this->imageMaxSizes);
-			}
-		}
-		$imageMain = new KitkuImage($imageData['tmp_name'], $imagePath, 'main');
-		if ($imageMain->error) {
-			return $image->error;
-		} else {
-			$imageMain->save($this->imageMaxSizes);
+		try {
+			$this->handle_images($imageData, $postData, $urlTitle);
+		} catch (Exception $e) {
+			return $e->getMessage();
 		}
 
-		$content = $purifier->purify($postData['new-post-content']);
+		$content = $this->handle_content($postData['editor-content']);
 
 		$insert = [
 			'title' => $title,
@@ -126,9 +134,153 @@ class Admin extends Kitku {
 		];
 
 		if ($this->insert('posts', $insert)) {
-			return true;
+			return 'success,'.$urlTitle;
 		} else {
 			return 'serverError';
+		}
+	}
+
+	public function edit_post(array $postData, array $imageData, string $original) {
+		$title = $this->handle_title($postData['editor-title']);
+
+		$oldData = $this->select('*', 'posts', 'urlTitle='.$original)[0];
+
+		$urlTitle = $this->strip_special_chars($title);
+		$tempUrlTitle = time().'_'.$this->random_string(5);
+
+		$tags = $this->handle_tags($postData['editor-tags']);
+
+		$category = $this->handle_category($postData['editor-category']);
+
+		try {
+			$this->handle_images($imageData, $postData, $tempUrlTitle);
+		} catch (Exception $e) {
+			return $e->getMessage();
+		}
+
+		$content = $this->handle_content($postData['editor-content']);
+
+		$insert = [
+			'title' => $title,
+			'urlTitle' => $tempUrlTitle,
+			'author' => $oldData['author'],
+			'category' => $category,
+			'date' => $oldData['date'],
+			'tags' => $tags,
+			'views' => $oldData['views'],
+			'content' => $content
+		];
+
+		if ($this->insert('posts', $insert)) {
+
+			if (!$imageData['name'] && $postData['remove-main-image'] !== 'true') {
+				$originalMainImages = glob($this->imagePath.$original.'/main_*');
+				foreach($originalMainImages as $filename) {
+					rename($filename, $this->imagePath.$tempUrlTitle.(str_replace($this->imagePath.$original, '', $filename)));
+				}	
+			}
+
+			$this->delete('posts', ['urlTitle='.$original]);
+			$this->delete_files($this->imagePath.$original.'/');
+
+			$this->update('posts', ['urlTitle' => $urlTitle], ['urlTitle='.$tempUrlTitle]);
+			rename($this->imagePath.$tempUrlTitle, $this->imagePath.$urlTitle);
+
+			return 'success,'.$urlTitle;
+		} else {
+			return 'serverError';
+		}
+	}
+
+	public function delete_post($post) {
+		$this->delete_files($this->imagePath.$post);
+		return $this->delete('posts', ['urlTitle='.$post]);
+	}
+
+	private function handle_title($title) {
+		$this->set_purifier();
+		$title = trim($title);
+		return $this->purifier->purify($title);
+	}
+
+	private function handle_tags($tags) {
+		$tags = strtolower($tags);
+		$tags = trim($tags);
+		$tags = preg_replace('/,\s*/', ',', $tags);
+		return str_replace(' ', '-', $tags);
+	}
+
+	private function handle_category($category) {
+		$this->set_purifier();
+
+		$category = trim($category);
+		return $this->purifier->purify($category);
+	}
+
+	private function handle_images($imageData, $postData, $urlTitle) {
+		$imagePath = $this->home['server'].'images/'.$urlTitle.'/';
+
+		if (!file_exists($imagePath)) {
+			mkdir($imagePath);
+		}
+		$images = json_decode($postData['images']);
+		if (!empty($images)) {
+			foreach($images as $key => $value) {
+				$image = new KitkuImage($value, $imagePath, $key);
+				if ($image->error) {
+					throw new Exception('imageError'.$image->error.' on image: '.intval($key)+1);
+					return false;
+				} else {
+					$image->save($this->imageMaxSizes);
+				}
+			}
+		}
+		
+		if (!empty($imageData['tmp_name'])) {
+			$imageMain = new KitkuImage($imageData['tmp_name'], $imagePath, 'main');
+			if ($imageMain->error) {
+				throw new Exception('imageError'.$image->error.' on Main Image.');
+				return false;
+			} else {
+				$imageMain->save($this->imageMaxSizes);
+			}
+		}
+		return true;
+	}
+
+	private function handle_content($content) {
+		$this->set_purifier();
+		return $this->purifier->purify($content);
+	}
+
+	private function get_smallest_main_image($urlTitle) {
+		foreach($this->imageMaxSizes as $key => $value) {
+			$smallest = $key;
+			break;
+		}
+		$glob = glob($this->imagePath.$urlTitle.'/main_'.$smallest.'.*');
+		return !empty($glob[0]) ? $glob[0] : false;
+	}
+
+	public function delete_files($target) {
+		if(is_dir($target)){
+			$files = glob($target.'*', GLOB_MARK );
+	
+			foreach( $files as $file ){
+				$this->delete_files($file);      
+			}
+	
+			if(is_dir($target)){
+				rmdir($target);
+			}
+		} elseif(is_file($target)) {
+			unlink($target);  
+		}
+	}
+
+	private function set_purifier() {
+		if (empty($this->purifier)) {
+			$this->purifier = new HTMLPurifier();
 		}
 	}
 }
@@ -149,8 +301,29 @@ if (!empty($_POST)) {
 		case 'get_data':
 			echo $kitku->get_data($_POST['page']);
 		break;
-		case 'new_post':
-			echo($kitku->new_post($_POST, $_FILES['new-post-image']));
+		case 'new-post':
+			echo($kitku->new_post($_POST, $_FILES['editor-image']));
+		break;
+		case 'get-post':
+			echo($kitku->get_data($_POST['post']));
+		break;
+		case 'edit-post':
+			echo($kitku->edit_post($_POST, $_FILES['editor-image'], $_POST['original']));
+		break;
+		case 'delete-post':
+			echo($kitku->delete_post($_POST['post']));
+		break;
+		case 'new-page':
+			echo($kitku->new_page($_POST, $_FILES['editor-image']));
+		break;
+		case 'get-page':
+			echo($kitku->edit_page($_POST, $_FILES['editor-image']));
+		break;
+		case 'edit-page':
+			echo($kitku->edit_page($_POST, $_FILES['editor-image']));
+		break;
+		case 'delete-page':
+			echo($kitku->delete_page($_POST['post']));
 		break;
 	}
 	exit();
@@ -161,8 +334,7 @@ include $kitku->home['installServer'].'res/header.php';
 ?>
 
 <script>
-	const installUrl = '<?= $kitku->home['installUrl'] ?>',
-		buildTableIgnores = JSON.parse('<?= json_encode($kitku->buildTableIgnores); ?>'),
+	const buildTableIgnores = JSON.parse('<?= json_encode($kitku->buildTableIgnores); ?>'),
 		buildTableToggles = JSON.parse('<?= json_encode($kitku->buildTableToggles); ?>');
 </script>
 
@@ -212,6 +384,19 @@ include $kitku->home['installServer'].'res/header.php';
 
 		<div id="main">
 
+			<div id="main-modal" class="hidden">
+				<div>
+					<div>
+						<div id="main-modal-busy" class="surge"></div>
+						<div class="main-modal-content">
+							<h2 id="main-modal-header">Whoa there, partner!</h2>
+							<div id="main-modal-message">No need to get all uppity about it.</div>
+							<div id="main-modal-button" class="button" style="margin: 0 1em 1em">okay</div>
+						</div>
+					</div>
+				</div>
+			</div>
+
 			<div data-page="home" class="main-content active">
 				<h1>The home page</h1>
 				<hr />
@@ -220,7 +405,7 @@ include $kitku->home['installServer'].'res/header.php';
 			<div data-page="posts" class="main-content">
 				<div class="page-title-container">
 					<h1 class="page-title"><?= $kitku->siteName ?>'s Posts</h1>
-					<div data-page="new-post" class="button new-button">New Post</div>
+					<div data-page="editor" class="button new-button">New Post</div>
 				</div>
 				<hr>
 				<div class="table-container"">
@@ -263,33 +448,43 @@ include $kitku->home['installServer'].'res/header.php';
 			</div>
 
 			<!-- Sub Pages -->
-			<div data-page="new-post" class="main-content">
+			<div data-page="editor" class="main-content" data-type="">
 				<div class="page-title-container">
-					<h1 class="page-title">New Post</h1>
-						<div id="new-post-button" class="button">Upload</div>
-					</div>
+					<h1 id="editor-page-title" class="page-title">New Post</h1>
+					<div id="editor-button" class="button">Save</div>
+				</div>
 					<hr />
-						<form name="new-post" class="form-new-post form-grid" autocomplete="off" onsubmit="return false">
-							<label for="new-post-title">Title: </label>
-							<input type="text" name="new-post-title" required></input>
-							<label for="new-post-tags">Tags: </label>
+					<form name="editor" class="form-editor form-grid" autocomplete="off" onsubmit="return false">
+						<label for="editor-title">Title: </label>
+						<input id="editor-title" type="text" name="editor-title" required></input>
+						<label for="editor-tags">Tags: </label>
+						<div>
+							<input id="editor-tags" type="text" name="editor-tags" placeholder="Seperated by commas. Letters and numbers only." onfocus="this.value =  this.value"></input>
+							<div id="editor-tags-container">
+							</div>
+						</div>
+						<label for="editor-category">Category: </label>
+						<div id="editor-category-container">
+							<input id="editor-category" type="text" name="editor-category"></input>
+							<div id="category-dropdown" class="hidden"></div>
+						</div>
+						<label for="editor-image">Main Image: </label>
+						<div id="main-image-preview-container">
+							<div class="relative margin-1">
+								<img id="main-image-preview" src="" />
+								<div id="main-image-preview-overlay" class="hidden">Hello World</div>
+							</div>
 							<div>
-								<input id="new-post-tags" type="text" name="new-post-tags" placeholder="Seperated by commas. Letters and numbers only."></input>
-								<div id="new-post-tags-container">
-								</div>
+								<div id="main-image-change" class="button">Change</div>
+								<div id="main-image-remove" class="button">Remove</div>
 							</div>
-							<label for="new-post-category">Category: </label>
-							<div id="new-post-category-container">
-								<input id="new-post-category" type="text" name="new-post-category"></input>
-								<div id="category-dropdown" class="hidden"></div>
-							</div>
-							<label for="new-post-image">Post Image: </label>
-							<input type="file" name="new-post-image" accept="image/png, image/jpeg, image/gif"></input>
-							<input id="new-post-submit" class="hidden" type="submit"></input>
-						</form>
+						</div>
+						<input id="main-image-input" class="hidden" type="file" name="editor-image" accept="image/png, image/jpeg, image/gif"></input>
+						<input id="editor-submit" class="hidden" type="submit"></input>
+					</form>
 					<br>
 					<div class="editor-container">
-						<div class="editor" id="post-editor"></div>
+						<div class="editor-content editor" id="editor-content"></div>
 					</div>
 				</div>
 			</div>

@@ -17,6 +17,10 @@ class Kitku {
 		if (!empty($this->dbInfo)) {
 			$this->open_conn($this->dbInfo['server'], $this->dbInfo['username'], $this->dbInfo['password'], (!empty($this->dbInfo['database'])) ? $this->dbInfo['database'] : '');
 		}
+		if (!empty($this->imageMaxSizes)) {
+			$this->imageMaxSizes['max'] = '';
+			$this->imageMaxSizes['source'] = '';
+		}
 	}
 
 	function __destruct() {
@@ -177,6 +181,34 @@ class Kitku {
 		}
 	}
 
+	public function delete(string $table, array $where, $condition = null) {
+		// DELETE FROM using prepared statements
+		// usage is as follows --> delete('table', ['col1=val1', 'col2=val2'], ['OR'])
+		// $condition will default to AND
+		// Returns true on success
+		$values = [];
+		$executeParams = [];
+
+		$command = "DELETE FROM $table";
+
+		$i = 0;
+
+		$getWheres = $this->get_command_wheres($where, $condition);
+		$command = $command.$getWheres[0];
+		foreach ($getWheres[1] as $key => $value) {
+			$executeParams[$key] = $value;
+		}
+
+		try {
+			$stmt = $this->conn->prepare($command);
+			$stmt->execute($executeParams);
+			return true;
+		} catch (\PDOException $e) {
+			$this->parse_errors($e->getMessage());
+			return false;
+		}
+	}
+
 	protected function parse_errors($error) {
 		// simplify verbose errors
 		if (is_string($error)) {
@@ -230,6 +262,44 @@ class Kitku {
 		}
 
 		return [$command, $executeParams];
+	}
+
+	/* == POST / PAGE FUNCTIONS == */
+	public function get_content_data($urlTitle) {
+		$imgSrcs;
+		$images;
+		$sizes = $this->imageMaxSizes;
+		$path = $this->home['server'].'images/'.$urlTitle.'/';
+		$urlPath = $this->home['url'].'images/'.$urlTitle.'/';
+		$files = glob($path.'*');
+
+		$content = $this->select('content', 'posts', 'urlTitle='.$urlTitle)[0]['content'];
+		if (!$content) {
+			$content = $this->select('content', 'posts', 'urlTitle='.$urlTitle)[0]['content'];
+		}
+
+		preg_match_all('/<img src="image-\d?"/', $content, $imgSrcs);
+		foreach ($imgSrcs[0] as $value) {
+			$value1 = trim(substr($value, 9), '"');
+			$image;
+			foreach($sizes as $key => $value2) {
+				$image[$key] = (glob($path.$value1.'_'.$key.'.*')[0] ?? '');
+			}
+			/*
+			$image['max'] = (glob($path.$value1.'_max'.'.*')[0] ?? '');
+			$image['source'] = (glob($path.$value1.'_source'.'.*')[0] ?? '');
+			*/
+			$images[$value1] = $image;
+		}
+
+		foreach($images as $key1 => $value1){
+			foreach($value1 as $key2 => $value2) {
+				$newValue2 = str_replace($path, $urlPath, $value2);
+				$images[$key1][$key2] = $newValue2;
+			}
+		}
+
+		return [$images, $imgSrcs[0], $content];
 	}
 
 	/* == USER FUNCTIONS == */
@@ -378,8 +448,8 @@ class Kitku {
 		return $ip;
 	}
 
-	public static function dump($val) {
-		echo '<pre style="background-color: black; color: ivory; padding: 1rem; border-radius: 7px"><h2>DUMP:</h2>';
+	public static function dump($val, $title = false) {
+		echo '<pre style="background-color: black; color: ivory; padding: 1rem; border-radius: 7px"><h2>'.($title ?: 'DUMP').':</h2>';
 		var_dump($val, true);
 		echo '</pre>';
 	}
@@ -478,6 +548,14 @@ class KitkuImage {
 	public function save_reduced(array $sizes) {
 		// Receives an array of target sizes to save the images as.
 		// example ----> 'key' => ['max-x', 'max-y']
+
+		if (array_key_exists('max', $sizes)) {
+			unset($sizes['max']);
+		}
+		if (array_key_exists('source', $sizes)) {
+			unset($sizes['source']);
+		}
+
 		if (!$this->error) {
 			if ($this->animated) {
 				$this->save_animated();
@@ -519,7 +597,7 @@ class KitkuImage {
 	public function save(array $sizes) {
 		if (!$this->error) {
 			if ($this->animated) {
-				$this->save_max();
+				$this->save_source();
 			} else {
 				$this->save_reduced($sizes);
 				$this->save_max();

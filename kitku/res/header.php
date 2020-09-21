@@ -8,4 +8,9 @@
 	<link rel="stylesheet" type="text/css" href="<?= $kitku->home['installUrl'].'res/css/default-style.css'?>">
 	<link rel="stylesheet" type="text/css" href="<?= $kitku->home['installUrl'].'res/css/quill-snow.css'?>">
 	<link rel="icon" type="image/png" href="<?= $kitku->home['installUrl'].'res/images/favicon.png'?>"/>
+	<script>
+	const installUrl = '<?= $kitku->home['installUrl'] ?>',
+		homeUrl = '<?= $kitku->home['url'] ?>',
+		imageMaxSizes = JSON.parse('<?= json_encode($kitku->imageMaxSizes) ?>');
+	</script>
 </head>

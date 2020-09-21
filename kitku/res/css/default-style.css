@@ -2,16 +2,21 @@
 	--purple-0: #130f15;
 	--purple-1: #231f22;
 	--purple-2: #38353a;
+	--purple-3: #938899;
 
 	--teal-0: #135050;
 	--teal-1: #008080;
 	--teal-2: #1ab3b3;
-	--teal-3: #76bebe;
+	--teal-3: #87caca;
+	--teal-4: #cce0e0;
 
 	--grey-0: #242424;
 	--grey-1: #b4b4b4;
 	--grey-2: #dfdfdf;
-	--grey-3: #f5f5ee;
+	--grey-3: #e6e6e6;
+	--grey-4: #f8f8f8;
+
+	--focusout-overlay: #465f5f67;
 }
 
 * {
@@ -76,6 +81,7 @@ hr {
 }
 
 #main {
+	position: relative;
 	padding: 2vw;
 	background-color: var(--grey-2);
 	overflow-y: auto;
@@ -85,13 +91,49 @@ hr {
 	color: var(--teal-1);
 }
 
+#main-modal {
+	z-index: 99;
+	position: absolute;
+	display: flex;
+	justify-content: center;
+	align-items: center;
+	top: 0;
+	left: 0;
+	height: 100%;
+	width: 100%;
+	background-color: var(--focusout-overlay);
+}
+
+#main-modal > div {
+	background-color: var(--purple-1);
+}
+
+#main-modal .main-modal-content {
+	background-color: var(--purple-1);
+	width: max-content;
+	text-align: center;
+}
+
+#main-modal .main-modal-content > * {
+	margin: 0;
+	padding: 0.5em 0.5em;
+}
+
+#main-modal-busy {
+	margin: 0 auto;
+	box-sizing: border-box;
+	height: 1em;
+	width: 0%;
+	background-color: var(--teal-1);
+}
+
 #main-header {
 	display: flex;
 	justify-content: space-between;
 	align-items: center;
 	padding: 0.3rem 0;
 	color: var(--grey-2);
-	background-color: #313131;
+	background-color: var(--grey-0);
 }
 
 /* -- Navbar Items-- */
@@ -159,8 +201,15 @@ hr {
 
 table {
 	width: 100%;
+	min-width: 1100px;
 	border-spacing: 0;
 	margin: 0 auto;
+}
+
+table a {
+	color: var(--teal-0);
+	text-decoration: underline;
+	text-decoration-color: var(--teal-3);
 }
 
 table th {
@@ -182,12 +231,21 @@ table tr {
 	color: var(--grey-0);
 }
 
+table tr:nth-of-type(odd) {
+	background-color: var(--grey-4)
+}
+
+table tr:hover {
+	background-color: var(--teal-4);
+}
+
 table td {
+	max-width: 10vw;
 	border-bottom: 2px solid var(--grey-1);
 	border-right: 3px solid var(--grey-1);
 	text-align: center;
 	font-family: "Trebuchet MS", Helvetica, sans-serif;
-	padding: 1rem;
+	padding: 0.5em 1em;
 }
 
 .bottom-left {
@@ -203,6 +261,11 @@ table tr>td:last-of-type {
 }
 table tr:last-of-type>td {
 	border-bottom: none;
+}
+
+.icon-edit, 
+.icon-delete {
+	cursor: pointer;
 }
 
 /* -- Containers -- */
@@ -264,7 +327,7 @@ input[type="text"],
 input[type="email"], 
 input[type="password"],
 form > select {
-	background-color: var(--grey-3);
+	background-color: var(--grey-4);
 	border: 1px solid var(--grey-2);
 	width: 100%;
 	max-width: 35em;
@@ -285,7 +348,7 @@ button, input[type="submit"], input[type="reset"] {
 	outline: inherit;
 }
 
-.form-new-post {
+.form-editor {
 	color: var(--grey-0);
 }
 
@@ -299,7 +362,7 @@ button, input[type="submit"], input[type="reset"] {
 	margin: 0 0 0 0.5rem;
 }
 
-#new-post-tags-container {
+#editor-tags-container {
 	max-width: 35em;
 }
 
@@ -309,12 +372,12 @@ button, input[type="submit"], input[type="reset"] {
 	padding: 0.2em 0.3em;
 	border-radius: 5px;
 	font-size: 80%;
-	background-color: var(--grey-3);
-	color: var(--teal-3);
+	background-color: var(--grey-4);
+	color: var(--purple-3);
 	cursor: pointer;
 }
 
-#new-post-category-container {
+#editor-category-container {
 	position: relative;
 }
 
@@ -341,14 +404,38 @@ button, input[type="submit"], input[type="reset"] {
 	margin-bottom: 0;
 }
 
+#main-image-preview-container {
+	display: flex;
+	align-items: center;
+	width: max-content;
+	background-color: var(--grey-4);
+}
+
+#main-image-preview-container .button {
+	margin: 1em 1em 1em 0;
+}
+
+#main-image-preview-overlay {
+	display: flex;
+	justify-content: center;
+	align-items: center;
+	position: absolute;
+	width: 100%;
+	height: 100%;
+	top: 0;
+	left: 0;
+	background-color: var(--grey-0);
+	color: var(--grey-4);
+}
+
 /* -- Buttons -- */
 .button {
 	color: var(--grey-2);
 	background-color: var(--teal-1);
 	border: 1px solid var(--teal-0);
 	border-radius: 5px;
-	padding: 0 1rem;
-	margin: 0 1rem;
+	padding: 0 1em;
+	margin: 0 1em;
 	cursor: pointer;
 }
 
@@ -367,7 +454,11 @@ button, input[type="submit"], input[type="reset"] {
 }
 
 .editor {
-	background-color: ivory;
+	color: var(--grey-0);
+	background-color: var(--grey-4);
+	position: relative;
+	overflow-x: visible;
+	overflow-y: hidden;
 }
 
 .ql-toolbar {
@@ -389,9 +480,28 @@ button, input[type="submit"], input[type="reset"] {
 	animation-iteration-count: 1;;
 }
 
+@keyframes surge {
+	0% { width : 10%; }
+	50% { width: 100%; }
+	100% {width: 10% }
+}
+
+.surge {
+	animation: surge 3s;
+	animation-iteration-count: infinite;
+}
+
 /* -- Helpers -- */
 .relative {
 	position: relative;
+}
+
+.padding-1 {
+	padding: 1em;
+}
+
+.margin-1 {
+	margin: 1em;
 }
 
 .right {
@@ -405,5 +515,5 @@ button, input[type="submit"], input[type="reset"] {
 }
 
 .hidden {
-	display: none;
+	display: none !important;
 }
