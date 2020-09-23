@@ -161,7 +161,8 @@ if (!empty($_POST)) {
 				'power' => 'VARCHAR(30) NOT NULL',
 				'authToken' => 'VARCHAR(255) NOT NULL',
 				'authSelector' => 'VARCHAR(50) NOT NULL',
-				'authExpires' => 'INT(12) DEFAULT UNIX_TIMESTAMP() NOT NULL'
+				'authExpires' => 'INT(12) DEFAULT UNIX_TIMESTAMP() NOT NULL',
+				'passwordReset' => 'VARCHAR(50) NOT NULL'
 			];
 			$postsColumns = [
 				'title' => 'VARCHAR(80) NOT NULL',
@@ -175,6 +176,7 @@ if (!empty($_POST)) {
 			];
 			$pagesColumns = [
 				'title' => 'VARCHAR(80) NOT NULL',
+				'urlTitle' => 'VARCHAR(255) NOT NULL',
 				'parent' => 'VARCHAR(80)',
 				'views' => 'INT(12) NOT NULL DEFAULT 0',
 				'content' => 'LONGTEXT NOT NULL',
@@ -215,6 +217,7 @@ if (!empty($_POST)) {
 			
 			$defaultBlog = [
 				'title' => 'Blog',
+				'urlTitle' => 'blog',
 				'parent' => '',
 				'views' => '',
 				'content' => 'This is the default blog page. Your posts will be collected and displayed here',
@@ -258,9 +261,6 @@ if (!empty($_POST)) {
 ?>
 
 <script>
-	const installUrl = '<?= $kitku->home['installUrl'] ?>',
-		homeUrl = '<?= $kitku->home['url'] ?>';
-
 	let activePage = <?= (isset($kitku->installed) ? $kitku->installed : 0); ?>;
 </script>
 
@@ -270,7 +270,7 @@ if (!empty($_POST)) {
 		<div class="content-container">
 
 			<div class="content-header">
-				<img id="kitku-logo" width="64px" height="64px" src="<?= $kitku->home['installUrl'].'res/images/logo.png'?>" />
+				<img id="kitku-logo-static" width="64px" height="64px" src="<?= $kitku->home['installUrl'].'res/images/logo.png'?>" />
 				<h1>Welcome to Kitku!</h1>
 				<em>- Simple Content Management -</em>
 			</div>
@@ -333,7 +333,7 @@ if (!empty($_POST)) {
 				<label for="page0-form-submit" class="button  right  hidden [ paginate-button page0 ]" tabindex="0">Next</label>
 				<label for="page1-form-submit" class="button  right  hidden [ paginate-button page1 ] " tabindex="0">Next</label>
 				<label for="page2-form-submit" class="button  right  hidden  [ paginate-button page2 ]" tabindex="0">Complete</label>
-				<button id="back-button" class="button  left  hidden" tabindex="0">Back</button>
+				<button id="back-button" class="button  left  hidden  margin-right-1" tabindex="0">Back</button>
 			</div>
 
 		</div>

@@ -42,6 +42,10 @@ hr {
 	margin-bottom: 1rem;
 }
 
+h4 {
+	margin: 1em 0 0 0;
+}
+
 .dummy-link, .dummy-link:visited {
 	color: var(--grey-2);
 	text-decoration: none;
@@ -51,7 +55,14 @@ hr {
 	width: 64px;
 	image-rendering: pixelated;
 	margin: 0 auto;
-	padding: 2rem 0;
+	padding: 2em 0;
+}
+
+#kitku-logo-static {
+	width: 64px;
+	image-rendering: pixelated;
+	margin: 0 auto;
+	padding: 1em 0;
 }
 
 /* -- Page Structure -- */
@@ -69,11 +80,19 @@ hr {
 	height: 100%;
 }
 
-#login {
+#login,
+#reset {
 	display: flex;
-	height: 80%;
+	flex-direction: column;
+	height: 70%;
 	align-items: center;
 	justify-content: center;
+}
+
+#forgot-password {
+	color: var(--teal-1);
+	font-size: 90%;
+	cursor: pointer;
 }
 
 #navbar {
@@ -118,17 +137,22 @@ hr {
 	text-align: center;
 }
 
-#main-modal .main-modal-content > * {
-	margin: 0;
-	padding: 0.5em 0.5em;
-}
-
 #main-modal-busy {
 	margin: 0 auto;
 	box-sizing: border-box;
 	height: 1em;
 	width: 0%;
 	background-color: var(--teal-1);
+}
+
+#main-modal-header,
+#main-modal-message {
+	margin: 0;
+	padding: 0.5em 1em;
+}	
+
+#main-modal-button {
+	margin: 0.5em auto 1em auto;
 }
 
 #main-header {
@@ -317,7 +341,7 @@ table tr:last-of-type>td {
 .form-grid {
 	display: grid;
 	padding: 1rem 0 0 0;
-	grid-template-columns: auto 1fr;
+	grid-template-columns: minmax(max-content, auto) 1fr;
 	grid-row-gap: 1rem;
 	grid-column-gap: 1rem;
 }
@@ -343,16 +367,6 @@ form > select {
 input[type="file"] {
 	width: max-content;
 	cursor: pointer;
-}
-
-button, input[type="submit"], input[type="reset"] {
-	background: none;
-	color: inherit;
-	border: none;
-	padding: 0;
-	font: inherit;
-	cursor: pointer;
-	outline: inherit;
 }
 
 .form-editor {
@@ -419,7 +433,7 @@ button, input[type="submit"], input[type="reset"] {
 }
 
 #main-image-preview-container .button {
-	margin: 1em 1em 1em 0;
+	margin: 1em 0 1em 1em;
 }
 
 #main-image-preview-overlay {
@@ -439,10 +453,11 @@ button, input[type="submit"], input[type="reset"] {
 .button {
 	color: var(--grey-2);
 	background-color: var(--teal-1);
+	width: auto;
+	max-width: 10em;
 	border: 1px solid var(--teal-0);
 	border-radius: 5px;
 	padding: 0 1em;
-	margin: 0 1em;
 	cursor: pointer;
 }
 
@@ -511,6 +526,10 @@ button, input[type="submit"], input[type="reset"] {
 	margin: 1em;
 }
 
+.margin-1-right{
+	margin-right: 1em;
+}
+
 .right {
 	position: absolute;
 	right: 0;
@@ -526,6 +545,10 @@ button, input[type="submit"], input[type="reset"] {
 }
 
 /* -- Responzive Rules -- */
+#mobile-spacer {
+	display: none;
+}
+
 #hamburger-menu {
 	display: none;
 	position: absolute;
@@ -542,6 +565,10 @@ button, input[type="submit"], input[type="reset"] {
 	fill: var(--teal-1);
 }
 
+.form-collapse {
+	display: none;
+}
+
 @media only screen and (max-width: 1120px) {
 	.navbar-content {
 		display: none;
@@ -554,13 +581,25 @@ button, input[type="submit"], input[type="reset"] {
 	}
 }
 
-@media only screen and (max-width: 666px /* 🤘😠🤘 */ ) {
+@media only screen and (max-width: 800px ) {
 	.form-grid {
+		display: block;
+	}
+	.form-grid > label {
+		margin: 0.5em 0;
+	}
+	.form-grid input, 
+	.form-grid select {
+		display: block;
+		margin-bottom: 1em;
+	}
+
+	.form-collapse {
 		display: block;
 	}
 }
 
-@media only screen and (max-width: 580px) {
+@media only screen and (max-width: 760px) {
 	.navbar-content {
 		display: initial;
 	}
@@ -586,6 +625,11 @@ button, input[type="submit"], input[type="reset"] {
 	}
 
 	#hamburger-menu {
+		display: block;
+	}
+
+	#mobile-spacer {
+		height: 8em;
 		display: block;
 	}
 }

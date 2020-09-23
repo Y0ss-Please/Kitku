@@ -26,6 +26,16 @@ class Admin extends Kitku {
 		parent::__destruct();
 	}
 
+	private function permission_check($owner = false) {
+		if ($_SESSION['power'] === 'admin' || $_SESSION['power'] === 'moderator') {
+			return true;
+		} else if ($owner && $_SESSION['user'] === $owner) {
+			return true;
+		}
+		return false;
+	}
+
+	// PAGE AND POST FUNCTIONS ??
 	public function get_data($data, $target = null) {
 
 		switch ($data) {
@@ -40,42 +50,53 @@ class Admin extends Kitku {
 				return (json_encode($allPosts, JSON_PRETTY_PRINT));
 			break;
 			case 'editor':
-				$tagsArray = $this->select('tags', 'posts');
-				$everyTag = [];
-				foreach($tagsArray as $arr) {
-					foreach($arr as $key => $value) {
-						$values = explode(',', $value);
-						foreach($values as $value) {
-							if ($value != ' ' && $value != '') {
-							array_push($everyTag, trim($value));
+				if ($target == 'post') {
+					$tagsArray = $this->select('tags', 'posts');
+					$everyTag = [];
+					foreach($tagsArray as $arr) {
+						foreach($arr as $key => $value) {
+							$values = explode(',', $value);
+							foreach($values as $value) {
+								if ($value != ' ' && $value != '') {
+								array_push($everyTag, trim($value));
 
+								}
 							}
 						}
 					}
-				}
-				$frequency = array_count_values($everyTag);
-				arsort($frequency);
-				foreach($frequency as $key => $value) {
-					array_push($this->tags, $key);
-				}
+					$frequency = array_count_values($everyTag);
+					arsort($frequency);
+					foreach($frequency as $key => $value) {
+						array_push($this->tags, $key);
+					}
 
-				$categoriesArray = $this->select('category', 'posts');
-				for($i=0; $i<count($categoriesArray); $i++) {
-					foreach($categoriesArray[$i] as $key => $value) {
-						if (!in_array($value, $this->categories)) {
-							if ($value != '' && $value != ' ') {
-								array_push($this->categories, $value);
+					$categoriesArray = $this->select('category', 'posts');
+					for($i=0; $i<count($categoriesArray); $i++) {
+						foreach($categoriesArray[$i] as $key => $value) {
+							if (!in_array($value, $this->categories)) {
+								if ($value != '' && $value != ' ') {
+									array_push($this->categories, $value);
+								}
 							}
 						}
 					}
+					sort($this->categories);
+					return json_encode([$this->tags, $this->categories]);
+				} else if($target == 'page') {
+					$titleRows = $this->select('title', 'pages');
+					$titles = [];
+					foreach($titleRows as $key => $value) {
+						$titles[] = $value['title'];
+					}
+					return json_encode($titles);
 				}
-				sort($this->categories);
-				return json_encode([$this->tags, $this->categories]);
 			break;
 			default:
 				$info = $this->select('*', 'pages', 'urlTitle='.$data);
+				$table = 'page';
 				if (!$info) {
 					$info = $this->select('*', 'posts', 'urlTitle='.$data);
+					$table = 'post';
 				}
 
 				$mainImage = $this->get_smallest_main_image($data);
@@ -88,11 +109,14 @@ class Admin extends Kitku {
 				$imgSrc = $contentData[1];
 				$content = $contentData[2];
 
-				for($i = 0; $i < count($contentData[1]); $i++) {
-					$content = str_replace($imgSrc[$i], '<img src="'.$images[trim(substr($imgSrc[$i], 9),'"')]['source'].'"', $content);
+				if (!empty($contentData[1])) {
+					for($i = 0; $i < count($contentData[1]); $i++) {
+						$content = str_replace($imgSrc[$i], '<img src="'.$images[trim(substr($imgSrc[$i], 9),'"')]['source'].'"', $content);
+					}
 				}
 
 				$info[0]['content'] = $content;
+				$info[0]['table'] = $table;
 
 				return ($info) ? json_encode($info[0]) : false;
 			break;
@@ -103,9 +127,7 @@ class Admin extends Kitku {
 	public function new_post(array $postData, array $imageData) {
 		
 		$title = $this->handle_title($postData['editor-title']);
-
 		$urlTitle = $this->strip_special_chars($title);
-
 		if ($this->select(['title'], 'posts', ['title='.$title, 'urlTitle='.$urlTitle], 'OR')) {
 			return 'titleTaken';
 		}
@@ -141,12 +163,15 @@ class Admin extends Kitku {
 	}
 
 	public function edit_post(array $postData, array $imageData, string $original) {
+
 		$title = $this->handle_title($postData['editor-title']);
-
 		$oldData = $this->select('*', 'posts', 'urlTitle='.$original)[0];
-
 		$urlTitle = $this->strip_special_chars($title);
 		$tempUrlTitle = time().'_'.$this->random_string(5);
+
+		if (!$this->permission_check($oldData['author'])) {
+			return 'permissionDenied';
+		}
 
 		$tags = $this->handle_tags($postData['editor-tags']);
 
@@ -192,9 +217,116 @@ class Admin extends Kitku {
 		}
 	}
 
-	public function delete_post($post) {
-		$this->delete_files($this->imagePath.$post);
-		return $this->delete('posts', ['urlTitle='.$post]);
+	public function new_page(array $postData, array $imageData) {
+		if (!$this->permission_check()) {
+			return 'permissionDenied';
+		}
+
+		$title = $this->handle_title($postData['editor-title']);
+		$urlTitle = $this->strip_special_chars($title);
+		if ($this->select(['title'], 'posts', ['title='.$title, 'urlTitle='.$urlTitle], 'OR')) {
+			return 'titleTaken';
+		}
+
+		$parent = $postData['editor-parent'];
+		$blogPage = isset($postData['editor-blog-page']) ? 1 : 0;
+		$showInMenu = isset($postData['editor-show-in-menu']) ? 1 : 0;
+
+		try {
+			$this->handle_images($imageData, $postData, $urlTitle);
+		} catch (Exception $e) {
+			return $e->getMessage();
+		}
+
+		$content = $this->handle_content($postData['editor-content']);
+
+		$insert = [
+			'title' => $title,
+			'urlTitle' => $urlTitle,
+			'parent' => $parent,
+			'views' => 0,
+			'content' => $content,
+			'blogPage' => $blogPage,
+			'showInMenu' => $showInMenu
+		];
+
+		if ($this->insert('pages', $insert)) {
+			return 'success,'.$urlTitle;
+		} else {
+			return 'serverError';
+		}
+	}
+
+	public function edit_page(array $postData, array $imageData, string $original) {
+		if (!$this->permission_check()) {
+			return 'permissionDenied';
+		}
+
+		{
+			$title = $this->handle_title($postData['editor-title']);
+			$oldData = $this->select('*', 'pages', 'urlTitle='.$original)[0];
+			$urlTitle = $this->strip_special_chars($title);
+			$tempUrlTitle = time().'_'.$this->random_string(5);
+	
+			$parent = $postData['editor-parent'];
+			if (strtolower($parent) == 'none') {
+				$parent = '';
+			} 
+
+			$blogPage = isset($postData['editor-blog-page']) ? 1 : 0;
+			$showInMenu = isset($postData['editor-show-in-menu']) ? 1 : 0;
+	
+			try {
+				$this->handle_images($imageData, $postData, $tempUrlTitle);
+			} catch (Exception $e) {
+				return $e->getMessage();
+			}
+	
+			$content = $this->handle_content($postData['editor-content']);
+	
+			$insert = [
+				'title' => $title,
+				'urlTitle' => $tempUrlTitle,
+				'parent' => $parent,
+				'views' => $oldData['views'],
+				'content' => $content,
+				'blogPage' => $blogPage,
+				'showInMenu' => $showInMenu
+			];
+	
+			if ($this->insert('pages', $insert)) {
+	
+				if (!$imageData['name'] && $postData['remove-main-image'] !== 'true') {
+					$originalMainImages = glob($this->imagePath.$original.'/main_*');
+					foreach($originalMainImages as $filename) {
+						rename($filename, $this->imagePath.$tempUrlTitle.(str_replace($this->imagePath.$original, '', $filename)));
+					}	
+				}
+	
+				$this->delete('pages', ['urlTitle='.$original]);
+				$this->delete_files($this->imagePath.$original.'/');
+	
+				$this->update('pages', ['urlTitle' => $urlTitle], ['urlTitle='.$tempUrlTitle]);
+				rename($this->imagePath.$tempUrlTitle, $this->imagePath.$urlTitle);
+	
+				return 'success,'.$urlTitle;
+			} else {
+				return 'serverError';
+			}
+		}
+	}
+
+	public function delete_p($urlTitle) {
+		$owner = $this->select('author', 'posts', 'urlTitle='.$urlTitle)[0]['author'];
+		if (!$this->permission_check($owner)) {
+			return 'permissionDenied';
+		}
+
+		$this->delete_files($this->imagePath.$urlTitle);
+		$this->delete('posts', ['urlTitle='.$urlTitle]);
+		$this->delete('pages', ['urlTitle='.$urlTitle]);
+
+		return 'success';
 	}
 
 	private function handle_title($title) {
@@ -277,7 +409,87 @@ class Admin extends Kitku {
 			unlink($target);  
 		}
 	}
+	// SETTINGS FUNCTIONS //
+	public function password_change($postData) {
+		if ($postData['new-password'] === $postData['confirm-password']) {
+			$newPassword = password_hash($postData['new-password'], PASSWORD_DEFAULT);
+			if ($this->update('users', ['password' => $newPassword], 'username='.$_SESSION['user'])) {
+				return 'success';
+			} else {
+				return 'error changing password';
+			}
+		} else {
+			return 'passwords don\'t match';
+		}
+	}
 
+	public function email_change($postData) {
+		if ($postData['new-email']) {
+			if ($this->update('users', ['email'=>$postData['new-email'], 'username='.$_SESSION['user']])) {
+				return 'success';
+			}
+		} else {
+			return 'Please provide an e-mail';
+		}
+	}
+
+	public function user_perm($postData) {
+		if ($_SESSION['power'] === 'admin') {
+			if ($kitku->update('users', ['power' => strtolower($postData['power'])], 'username='.$postData['user'])) {
+				return 'success';
+			} else {
+				return 'There was an error changing permissions...';
+			}
+		}else {
+			return 'Only an administrator may do that.';
+		}
+	}
+
+	public function new_user($postData) {
+		if ($_SESSION['power'] === 'admin') {
+
+			if ($this->select('username', 'users', 'username='.$postData['user'])) {
+				return 'Username already in use!';
+			}
+
+			if ($this->select('email', 'users', 'email='.$postData['email'])) {
+				return 'E-mail already in use!';
+			}
+
+			if ($postData['password'] === $postData['confirm-password']) {
+				$args = [
+					'username' => $postData['user'],
+					'password' => password_hash($postData['password'], PASSWORD_DEFAULT),
+					'power' => strtolower($postData['power']),
+					'email' => $postData['email']
+				];
+				if ($this->insert('users', $args)) {
+					return 'success';
+				} else {
+					return 'There was an error creating the user...';
+				}
+			} else {
+				return 'Passwords do not match!';
+			}
+		} else {
+			return 'Only an administrator may do that.';
+		}
+	}
+
+	public function get_users_list() {
+		if ($_SESSION['power'] === 'admin') {
+			$users = [];
+			$_users = $this->select('username', 'users', 'username<>'.$_SESSION['user']);
+			foreach($_users as $value) {
+				$users[] = $value['username'];
+			}
+			return $users;
+		} else {
+			return false;
+		}
+	}
+
+	// HELPER FUNCTIONS //
 	private function set_purifier() {
 		if (empty($this->purifier)) {
 			$this->purifier = new HTMLPurifier();
@@ -298,32 +510,40 @@ if (!empty($_POST)) {
 		case 'logout':
 			echo(($kitku->logout()) ? 'success' : 'failed');
 		break;
-		case 'get_data':
-			echo $kitku->get_data($_POST['page']);
+		// POSTS & PAGES //
+		case 'get-data':
+			echo $kitku->get_data($_POST['page'], $_POST['target']);
+		break;
+		case 'get-p':
+			echo($kitku->get_data($_POST['p']));
 		break;
 		case 'new-post':
 			echo($kitku->new_post($_POST, $_FILES['editor-image']));
 		break;
-		case 'get-post':
-			echo($kitku->get_data($_POST['post']));
-		break;
 		case 'edit-post':
 			echo($kitku->edit_post($_POST, $_FILES['editor-image'], $_POST['original']));
-		break;
-		case 'delete-post':
-			echo($kitku->delete_post($_POST['post']));
 		break;
 		case 'new-page':
 			echo($kitku->new_page($_POST, $_FILES['editor-image']));
 		break;
-		case 'get-page':
-			echo($kitku->edit_page($_POST, $_FILES['editor-image']));
-		break;
 		case 'edit-page':
-			echo($kitku->edit_page($_POST, $_FILES['editor-image']));
+			echo($kitku->edit_page($_POST, $_FILES['editor-image'], $_POST['original']));
 		break;
-		case 'delete-page':
-			echo($kitku->delete_page($_POST['post']));
+		case 'delete-p':
+			echo($kitku->delete_p($_POST['target']));
+		break;
+		// SETTINGS //
+		case 'password-change':
+			echo $kitku->password_change($_POST);
+		break;
+		case 'email-change':
+			echo $kitku->email_change($_POST);
+		break;
+		case 'user-perm':
+			echo $kitku->user_perm($_POST);
+		break;
+		case 'new-user':
+			echo $kitku->new_user($_POST);
 		break;
 	}
 	exit();
@@ -382,7 +602,7 @@ include $kitku->home['installServer'].'res/header.php';
 		<div id="main-header">
 			<span>Icons from <a href="https://friconix.com/">Friconix</a></span>
 			<span>Kitku alpha-<?= $kitku->version ?></span>
-			<button id="logout-button" class="button">Logout</button>
+			<button id="logout-button" class="button margin-1-right">Logout</button>
 		</div>
 
 		<div id="main">
@@ -394,7 +614,7 @@ include $kitku->home['installServer'].'res/header.php';
 						<div class="main-modal-content">
 							<h2 id="main-modal-header">Whoa there, partner!</h2>
 							<div id="main-modal-message">No need to get all uppity about it.</div>
-							<div id="main-modal-button" class="button" style="margin: 0 1em 1em">okay</div>
+							<div id="main-modal-button" class="button">okay</div>
 						</div>
 					</div>
 				</div>
@@ -408,7 +628,7 @@ include $kitku->home['installServer'].'res/header.php';
 			<div data-page="posts" class="main-content">
 				<div class="page-title-container">
 					<h1 class="page-title"><?= $kitku->siteName ?>'s Posts</h1>
-					<div data-page="editor" class="button new-button">New Post</div>
+					<div data-page="editor" data-subject="new-post" class="button new-button">New Post</div>
 				</div>
 				<hr>
 				<div class="table-container">
@@ -427,7 +647,7 @@ include $kitku->home['installServer'].'res/header.php';
 
 				<div class="page-title-container">
 					<h1 class="page-title"><?= $kitku->siteName ?>'s Pages</h1>
-					<div data-page="new-page" class="button new-button">New Page</div>
+					<div data-page="editor" data-subject="new-page" class="button new-button">New Page</div>
 				</div>
 				<hr>
 				<div class="table-container"">
@@ -442,8 +662,84 @@ include $kitku->home['installServer'].'res/header.php';
 				</div>
 			</div>
 
-			<div data-page="settings"class="main-content">
-				<h2>A setting page, eventually...</h2>
+			<div data-page="settings" class="main-content">
+				<h2>Settings</h2>
+				<h4>Logged in as : <?= $_SESSION['user'] ?></h4>
+				<h4>User permissions: <?= $_SESSION['power'] ?></h4>
+				<hr>
+
+				<h4>Change your password</h4>
+				<form name="password-change" class="form-grid" onsubmit="return false">
+					<label for="new-password">New Password:</label>
+					<input type="password" name="new-password" required>
+					<label for="confirm-password">Confirm Password:</label>
+					<input type="password" name="confirm-password" required>
+					<div></div>
+					<input type="submit" class="button settings-submit">
+				</form>
+				<br>
+
+				<h4>Change your email</h4>
+				<form name="email-change" class="form-grid" onsubmit="return false">
+					<label for="new-email">New E-mail:</label>
+					<input type="email" name="new-email" required>
+					<div></div>
+					<input type="submit" class="button settings-submit">
+				</form>
+				<br>
+
+
+				<?php 
+				$users = $kitku->get_users_list();
+				if ($users && $_SESSION['power'] === 'admin') {
+				?>
+				<h4>Change users permissions</h4>
+				<form name="user-perm" class="form-grid" onsubmit="return false">
+					<label for="user">User:</label>
+					<select name="user">
+						<?php
+						foreach($users as $value) {
+							echo("<option>$value</option>\r\n");
+						}
+						?>
+					</select>
+					<label for="power">Permissions:</label>
+					<select name="power">
+						<option>User</option>
+						<option>Moderator</option>
+					</select>
+					<div></div>
+					<input type="submit" class="button settings-submit">
+				</form>
+				<br>
+				<?php 
+				}
+				
+				if ($_SESSION['power'] === 'admin') {
+				?>
+				<h4>New User:</h4>
+				<form name="new-user" class="form-grid" onsubmit="return false">
+					<label for="user">User:</label>
+					<input name="user" type="text" required>
+					<label for="email">E-mail:</label>
+					<input type="email" name="email" required>
+					<label for="power">Permissions:</label>
+					<select name="power">
+						<option>User</option>
+						<option>Moderator</option>
+					</select>
+					<label for="password">Password:</label>
+					<input type="password" name="password" required>
+					<label for="confirm-password">Confirm Password:</label>
+					<input type="password" name="confirm-password" required>
+					<div></div>
+					<input type="submit" class="button settings-submit">
+				</form>
+				<br>
+				<?php
+				}
+				?>
+
 			</div>
 
 			<div data-page="github" class="main-content">
@@ -458,38 +754,56 @@ include $kitku->home['installServer'].'res/header.php';
 				</div>
 					<hr />
 					<form name="editor" class="form-editor form-grid" autocomplete="off" onsubmit="return false">
+
 						<label for="editor-title">Title: </label>
 						<input id="editor-title" type="text" name="editor-title" required></input>
-						<label for="editor-tags">Tags: </label>
-						<span>
+
+						<label class="pages-hide" for="editor-tags">Tags: </label>
+						<span class="pages-hide">
 							<input id="editor-tags" type="text" name="editor-tags" placeholder="Seperated by commas. Letters and numbers only." onfocus="this.value =  this.value"></input>
 							<div id="editor-tags-container">
 							</div>
 						</span>
-						<label for="editor-category">Category: </label>
-						<div id="editor-category-container">
+
+						<label class="pages-hide" for="editor-category">Category: </label>
+						<div class="pages-hide" id="editor-category-container">
 							<input id="editor-category" type="text" name="editor-category"></input>
 							<div id="category-dropdown" class="hidden"></div>
 						</div>
+
+						<label class="posts-hide" for="editor-title">Parent: </label>
+						<select id="editor-parent" class="posts-hide" name="editor-parent">
+							<option>None</option>
+						</select>
+
+						<label class="posts-hide" for="editor-blog-page">Blog Page</label>
+						<input id="editor-blog-page" class="posts-hide" type="checkbox" name='editor-blog-page'>
+						
+						<label class="posts-hide" for="editor-show-in-menu">Show in Menu</label>
+						<input id="editor-show-in-menu" class="posts-hide" type="checkbox" name='editor-show-in-menu'>
+
 						<label for="editor-image">Main Image: </label>
 						<div id="main-image-preview-container">
-							<div class="relative margin-1">
-								<img id="main-image-preview" src="" />
-								<div id="main-image-preview-overlay" class="hidden">Hello World</div>
-							</div>
 							<div>
 								<div id="main-image-change" class="button">Change</div>
 								<div id="main-image-remove" class="button">Remove</div>
 							</div>
+							<div class="relative margin-1">
+								<img id="main-image-preview" src="" />
+								<div id="main-image-preview-overlay" class="hidden">Hello World</div>
+							</div>
 						</div>
 						<input id="main-image-input" class="hidden" type="file" name="editor-image" accept="image/png, image/jpeg, image/gif"></input>
+
 						<input id="editor-submit" class="hidden" type="submit"></input>
+
 					</form>
 					<br>
 					<div class="editor-container">
 						<div class="editor-content editor" id="editor-content"></div>
 					</div>
 				</div>
+				<div id="mobile-spacer"></div>
 			</div>
 		</div>
 	</div>

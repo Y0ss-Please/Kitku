@@ -273,33 +273,35 @@ class Kitku {
 		$urlPath = $this->home['url'].'images/'.$urlTitle.'/';
 		$files = glob($path.'*');
 
-		$content = $this->select('content', 'posts', 'urlTitle='.$urlTitle)[0]['content'];
-		if (!$content) {
-			$content = $this->select('content', 'posts', 'urlTitle='.$urlTitle)[0]['content'];
+		$content = $this->select('content', 'posts', 'urlTitle='.$urlTitle);
+		if ($content) {
+			$content = $content[0]['content'];
+		} else {
+			$content = $this->select('content', 'pages', 'urlTitle='.$urlTitle)[0]['content'];
 		}
 
 		preg_match_all('/<img src="image-\d?"/', $content, $imgSrcs);
-		foreach ($imgSrcs[0] as $value) {
-			$value1 = trim(substr($value, 9), '"');
-			$image;
-			foreach($sizes as $key => $value2) {
-				$image[$key] = (glob($path.$value1.'_'.$key.'.*')[0] ?? '');
+		if (!empty($imgSrcs[0])) {
+			foreach ($imgSrcs[0] as $value) {
+				$value1 = trim(substr($value, 9), '"');
+				$image;
+				foreach($sizes as $key => $value2) {
+					$image[$key] = (glob($path.$value1.'_'.$key.'.*')[0] ?? '');
+				}
+				$images[$value1] = $image;
 			}
-			/*
-			$image['max'] = (glob($path.$value1.'_max'.'.*')[0] ?? '');
-			$image['source'] = (glob($path.$value1.'_source'.'.*')[0] ?? '');
-			*/
-			$images[$value1] = $image;
-		}
-
-		foreach($images as $key1 => $value1){
-			foreach($value1 as $key2 => $value2) {
-				$newValue2 = str_replace($path, $urlPath, $value2);
-				$images[$key1][$key2] = $newValue2;
+	
+			foreach($images as $key1 => $value1){
+				foreach($value1 as $key2 => $value2) {
+					$newValue2 = str_replace($path, $urlPath, $value2);
+					$images[$key1][$key2] = $newValue2;
+				}
 			}
-		}
 
-		return [$images, $imgSrcs[0], $content];
+			return [$images, $imgSrcs[0], $content];
+		} else {
+			return [false, false, $content];
+		}
 	}
 
 	/* == USER FUNCTIONS == */

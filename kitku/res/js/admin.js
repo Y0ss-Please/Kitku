@@ -72,6 +72,8 @@ class Editor {
         this.categories = [];
         this.quill = new Quill('#editor-content', quillOptions);
 
+        this.parents;
+
         this.form = document.forms['editor'];
 
         this.pageTitle = document.getElementById('editor-page-title');
@@ -84,70 +86,77 @@ class Editor {
         this.mainImageInput = document.getElementById('main-image-input');
         this.mainImageContainer = document.getElementById('main-image-preview-container');
         this.mainImagePreview = document.getElementById('main-image-preview');
+
+        this.select = document.getElementById('editor-parent');
     }
 
-    set_editor(option, title = null, tags = null, category = null, mainImage = null, content = null, original = null) {
-        this.option = option;
-        let pageTitle;
-        switch(option) {
-            case 'new-post':
-                pageTitle = 'New Page';
-            break;
-            case 'new-page':
-                pageTitle = 'New Page';
-            break;
-            case 'edit-post':
-                pageTitle = 'Edit Post';
-            break;
-            case 'edit-page':
-                pageTitle = 'Edit Page';
-            break;
-        }
+    upload() {
+        const form = this.form;
+        const msg = this.option.split('-')[1];
+        if (!form['editor-title'].value) return false ;
 
-        this.original = original ? original : this.original;
+        mainModal.show('Building your '+msg+'!', "This can take a minute. Please dont leave this page until it's done!");
 
-        if (pageTitle) {
-            this.set_page_title(pageTitle);
-        }
+        const fd = new FormData(form);
+        fd.append('func', this.option);
+        
+        const content = editor.get_content();
+        const imageElements = content.querySelectorAll('img');
 
-        this.set_title(title);
-        this.set_tags(tags);
-        this.set_category(category);
-        this.set_main_image(mainImage);
-        this.set_content(content);
-
-        this.build_editor();
-    }
-
-    async build_editor() {
-
-        await this.get_category_tags();
-        this.build_tag_buttons();
-        this.build_category_dropdown();
-    }
-
-    async get_category_tags() {
-        let promise = new Promise((resolve, reject) => {
-            const xhttp = new XMLHttpRequest();
-            xhttp.open('POST', installUrl+'admin.php', true);
-            xhttp.setRequestHeader('Content-type', 'application/x-www-form-urlencoded');
-            xhttp.send(`func=get_data&page=editor`);
-
-            xhttp.onreadystatechange = function() {
-                if (this.readyState == 4 && this.status == 200){
-                    const result = JSON.parse(this.responseText);
-                    callback(result[0], result[1]);
-                }
-            }
-
-            const callback = (tags, categories) => {
-                this.tags = tags;
-                this.categories = categories;
-                resolve(true);
-            }
+        let i = 0;
+        const images = {};
+        imageElements.forEach(element => {
+            images['image-'+i] = element.src;
+            element.src = 'image-'+i;
+            i++;
         });
 
-        return await promise;
+        fd.append('images', JSON.stringify(images));
+        fd.append('editor-content', content.innerHTML);
+        fd.append('original', this.original);
+        fd.append('remove-main-image', ((this.removeMainImage) ? 'true' : 'false'));
+
+        const xhttp = new XMLHttpRequest();
+                xhttp.open('POST', installUrl+'admin.php', true);
+                xhttp.send(fd);
+
+        xhttp.onreadystatechange = function() {
+            if (this.readyState == 4 && this.status == 200){
+                const result = this.responseText;
+                if (result.substr(0,7) === 'success') {
+                    mainModal.show('Success!',"You're new "+msg+" is live! You will be taken there in a few seconds.<br>Or click <a href=\""+homeUrl+result.substr(8)+"\">here</a> if you're not automatically redirected.");
+                    setTimeout(function() {
+                        location.href = homeUrl+result.substr(8);
+                    }, 2000);
+                } else if (result.includes('titleTaken')) {
+                    mainModal.show('Title Already Used', 'That title (or one very similar) is already in use! Please try something different.', true)
+                } else if (result.includes('imageError')) {
+                    mainModal.show('Image Error', 'There was a problem uploading one of your images.<br> The server says: '+result, true);
+                } else if (result.includes('permissionDenied')) {
+                    mainModal.show('Permission Denied', 'You may only change your own posts!', true);
+                } else {
+                    mainModal.show('Server Error', 'There was a problem with the server or your connection to it, please try again.');
+                }
+            }
+        }
+
+        i = 0;
+        imageElements.forEach(element => {
+            element.src = images['image-'+i];
+            i++;
+        });
+    }
+
+    async build_editor(option) {
+
+        if (option == 'new-post' || option == 'edit-post') {
+            await this.get_category_tags();
+            this.build_tag_buttons();
+            this.build_category_dropdown();
+        } else if(option == 'new-page' || option == 'edit-page') {
+            await this.get_parents();
+            this.build_parent_options();
+        }
     }
 
     build_tag_buttons() {
@@ -233,74 +242,66 @@ class Editor {
         }
     }
 
-    upload() {
-        const form = this.form;
-        if (!form['editor-title'].value) return false ;
-
-        mainModal.show('Building your new post!', "This can take a minute. Please dont leave this page until it's done!");
-
-        const fd = new FormData(form);
-        fd.append('func', this.option);
-        
-        const content = editor.get_content();
-        const imageElements = content.querySelectorAll('img');
-
-        let i = 0;
-        const images = {};
-        imageElements.forEach(element => {
-            images['image-'+i] = element.src;
-            element.src = 'image-'+i;
-            i++;
+    build_parent_options() {
+        this.select.innerHTML = '';
+        const fragment = document.createDocumentFragment();
+        const none = document.createElement('option');
+        none.textContent = 'None';
+        fragment.appendChild(none);
+        this.parents.forEach((parent) => {
+            const optionEle = document.createElement('option');
+            if (parent != this.title) {
+                optionEle.textContent = parent;
+                fragment.appendChild(optionEle);
+            }
         });
+        this.select.appendChild(fragment);
+    }
 
-        fd.append('images', JSON.stringify(images));
-        fd.append('editor-content', content.innerHTML);
-        fd.append('original', this.original);
-        fd.append('remove-main-image', ((this.removeMainImage) ? 'true' : 'false'));
+    set_editor(option, title = null, tags = null, category = null, mainImage = null, parent = null, blogPage = null, showInMenu = null, content = null, original = null) {
+        if (!option) { return }
+        this.option = option;
+        this.title = title;
+        let pageTitle;
+        const formChildren = this.form.children;
 
-        const xhttp = new XMLHttpRequest();
-                xhttp.open('POST', installUrl+'admin.php', true);
-                xhttp.send(fd);
+        const split = option.split('-');
 
-        xhttp.onreadystatechange = function() {
-            if (this.readyState == 4 && this.status == 200){
-                const result = this.responseText;
-                if (result.substr(0,7) === 'success') {
-                    mainModal.show('Success!',"You're new post is live! You will be taken there in a few seconds.<br>Or click <a href=\""+homeUrl+result.substr(8)+"\">here</a> if you're not automatically redirected.");
-                    setTimeout(function() {
-                        location.href = homeUrl+result.substr(8);
-                    }, 2000);
-                } else if (result.includes('titleTaken')) {
-                    mainModal.show('Title Already Used', 'That title (or one very similar) is already in use! Please try something different.', true)
-                } else if (result.includes('imageError')) {
-                    mainModal.show('Image Error', 'There was a problem uploading one of your images.<br> The server says: '+result, true);
-                } else {
-                    mainModal.show('Server Error', 'There was a problem with the server or your connection to it, please try again.');
+        if (split[1] == 'post') {
+            for(let i=0; i<formChildren.length; i++) {
+                if (formChildren[i].classList.contains('pages-hide')) {
+                    formChildren[i].classList.remove('hidden');
+                }
+                if (formChildren[i].classList.contains('posts-hide')) {
+                    formChildren[i].classList.add('hidden');
+                }
+            }
+        } else {
+            for(let i=0; i<formChildren.length; i++) {
+                if (formChildren[i].classList.contains('pages-hide')) {
+                    formChildren[i].classList.add('hidden');
+                }
+                if (formChildren[i].classList.contains('posts-hide')) {
+                    formChildren[i].classList.remove('hidden');
                 }
             }
         }
 
-        i = 0;
-        imageElements.forEach(element => {
-            element.src = images['image-'+i];
-            i++;
-        });
-    }
+        pageTitle = split[0].charAt(0).toUpperCase()+split[0].slice(1) + ' ' + split[1].charAt(0).toUpperCase()+split[1].slice(1);
 
-    set_page_title(text) {
-        this.pageTitle.textContent = text;
-    }
+        this.original = original ? original : this.original;
 
-    set_title(text) {
-        this.form['editor-title'].value = text;
-    }
+        this.pageTitle.textContent = pageTitle;
+        this.form['editor-title'].value = title;
+        this.form['editor-tags'].value = tags;
+        this.form['editor-category'].value = category;
+        this.form['editor-parent'].value = parent
+        this.form['editor-blog-page'].checked = (blogPage == '1') ? true : false; 
+        this.form['editor-show-in-menu'].checked = (showInMenu == '1' || showInMenu === null) ? true : false;
+        this.set_main_image(mainImage);
+        this.quill.root.innerHTML = content;
 
-    set_tags(text) {
-        this.form['editor-tags'].value = text;
-    }
-
-    set_category(text) {
-        this.form['editor-category'].value = text;
+        this.build_editor(option);
     }
 
     set_main_image(path) {
@@ -332,8 +333,50 @@ class Editor {
         }
     }
 
-    set_content(text) {
-        this.quill.root.innerHTML = text;
+    async get_category_tags() {
+        let promise = new Promise((resolve, reject) => {
+            const xhttp = new XMLHttpRequest();
+            xhttp.open('POST', installUrl+'admin.php', true);
+            xhttp.setRequestHeader('Content-type', 'application/x-www-form-urlencoded');
+            xhttp.send(`func=get-data&page=editor&target=post`);
+
+            xhttp.onreadystatechange = function() {
+                if (this.readyState == 4 && this.status == 200) {
+                    const result = JSON.parse(this.responseText);
+                    callback(result[0], result[1]);
+                }
+            }
+
+            const callback = (tags, categories) => {
+                this.tags = tags;
+                this.categories = categories;
+                resolve(true);
+            }
+        });
+
+        return await promise;
+    }
+
+    async get_parents() {
+        let promise = new Promise((resolve, reject) => {
+            const xhttp = new XMLHttpRequest();
+                xhttp.open('POST', installUrl+'admin.php', true);
+                xhttp.setRequestHeader('Content-type', 'application/x-www-form-urlencoded');
+                xhttp.send(`func=get-data&page=editor&target=page`);
+
+            xhttp.onreadystatechange = function() {
+                if (this.readyState == 4 && this.status == 200) {
+                    callback(JSON.parse(this.responseText));
+                }
+            }
+
+            const callback = (parents) => {
+                this.parents = parents;
+                resolve(true);
+            }
+        });
+
+        return await promise;
     }
 
     get_content() {
@@ -341,6 +384,62 @@ class Editor {
     }
 }
 var editor = new Editor('new-post');
+
+class Settings {
+    constructor() {
+        parent = this;
+        document.querySelectorAll('.settings-submit').forEach((ele) => {
+            ele.addEventListener('click', () => this.submit(ele));
+        })
+    }
+
+    submit(ele) {
+        const form = document.forms[ele.parentNode.name];
+        switch (form['name']) {
+            case 'password-change':
+                if (!form['new-password'].value || !form['confirm-password'].value) {
+                    return;
+                }
+            break;
+            case 'email-change':
+                if (!form['new-email'].value) {
+                    return;
+                }
+            break;
+            case 'user-perm':
+                if (!form['user'].value || !form['power'].value) {
+                    return;
+                }
+            break;
+            case 'new-user':
+                if (!form['user'].value || !form['power'].value || !form['email'] ||!form['password'].value || !form['confirm-password'].value) {
+                    return;
+                }
+            break;
+        }
+        this.ajax_submit(form['name'], form);
+    }
+
+    ajax_submit(formName, formData) {
+        const fd = new FormData(formData);
+        fd.append('func', formName);
+
+        const xhttp = new XMLHttpRequest();
+            xhttp.open('POST', installUrl+'admin.php')
+            xhttp.send(fd)
+
+        xhttp.onreadystatechange = function() {
+            if (this.readyState == 4 && this.status == 200) {
+                if (this.responseText == 'success') {
+                    mainModal.show('Success!', ' ', true);
+                } else {
+                    mainModal.show('Failed', this.responseText, true);
+                }
+            }
+        }
+    }
+}
+var settings = new Settings();
 
 function change_page(page, subject = null) {   
     set_active_attributes(page);
@@ -354,28 +453,32 @@ function edit_post(post) {
     const xhttp = new XMLHttpRequest();
             xhttp.open('POST', installUrl+'admin.php', true);
             xhttp.setRequestHeader('Content-type', 'application/x-www-form-urlencoded');
-            xhttp.send(`func=get-post&post=${target}`);
+            xhttp.send(`func=get-p&p=${target}`);
 
         xhttp.onreadystatechange = function() {
             if (this.readyState == 4 && this.status == 200){
                 const r = (JSON.parse(this.responseText));
-                editor.set_editor('edit-post', r['title'], r['tags'], r['category'], r['mainImage'], r['content'], r['urlTitle']);
+                editor.set_editor('edit-'+r['table'], r['title'], r['tags'], r['category'], r['mainImage'], r['parent'], r['blogPage'], r['showInMenu'], r['content'], r['urlTitle']);
             }
         }
 }
 
-function delete_post(post) {
+function delete_p(post) {
     if (confirm('Are you sure you want to delete this? This CANNOT be undone!')) {
         const target = post.currentTarget.getAttribute('data-target');
 
         const xhttp = new XMLHttpRequest();
             xhttp.open('POST', installUrl+'admin.php', true);
             xhttp.setRequestHeader('Content-type', 'application/x-www-form-urlencoded');
-            xhttp.send(`func=delete-post&post=${target}`);
+            xhttp.send(`func=delete-p&target=${target}`);
 
         xhttp.onreadystatechange = function() {
             if (this.readyState == 4 && this.status == 200){
-                change_page('posts');
+                if (this.responseText != 'success') {
+                    mainModal.show('Permission Denied!', 'You may only delete your own posts', true);
+                } else {
+                    change_page('home');
+                }
             }
         }
     }
@@ -394,7 +497,7 @@ function set_active_attributes(page) {
     }); 
 }
 
-function populate_active_page(page) {
+function populate_active_page(page, subject) {
 
     var result;
 
@@ -403,7 +506,7 @@ function populate_active_page(page) {
         const xhttp = new XMLHttpRequest();
             xhttp.open('POST', installUrl+'admin.php', true);
             xhttp.setRequestHeader('Content-type', 'application/x-www-form-urlencoded');
-            xhttp.send(`func=get_data&page=${page}`);
+            xhttp.send(`func=get-data&page=${page}&target=null`);
 
         xhttp.onreadystatechange = function() {
             if (this.readyState == 4 && this.status == 200){
@@ -433,7 +536,13 @@ function populate_active_page(page) {
             for(let val in result[0]) {
                 if (!buildTableIgnores.includes(val)){
                     const th = document.createElement('th');
-                    th.textContent = val.charAt(0).toUpperCase() + val.slice(1);
+                    if (val == 'blogPage') {
+                        th.textContent = 'Blog';
+                    } else if (val == 'showInMenu') {
+                        th.textContent = 'In Menu';
+                    } else {
+                        th.textContent = val.charAt(0).toUpperCase() + val.slice(1);
+                    }
                     tr.appendChild(th);
                 }
             }
@@ -450,7 +559,6 @@ function populate_active_page(page) {
                 const urlTitle = result[i]['urlTitle'];
 
                 tr = document.createElement('tr');
-                let first = true;
                 for(const val in e) {
                     if (!buildTableIgnores.includes(val)){
                         const td = document.createElement('td');
@@ -466,6 +574,10 @@ function populate_active_page(page) {
                         } else if (val == 'tags') {
                             const tags = e[val].replace(/,/g, ', ');
                             td.textContent = tags;
+                        } else if (val == 'blogPage') {
+                            td.textContent = (e[val] == 1 ? 'Blog' : '');  
+                        } else if (val == 'showInMenu') {
+                            td.textContent = (e[val] == 1 ? 'Yes' : 'No');  
                         } else {
                             td.textContent = e[val];
                         }
@@ -483,7 +595,7 @@ function populate_active_page(page) {
                 td = document.createElement('td');
                 td.appendChild(insert_icon('delete', urlTitle));
                 td.firstChild.addEventListener('click', (target) => {
-                    delete_post(target);
+                    delete_p(target);
                 });
                 tr.appendChild(td);
                 fragment.appendChild(tr);
@@ -498,8 +610,7 @@ function populate_active_page(page) {
             return element;
         }
     } else if (page == 'editor') {
-        if (!editor) editor = new Editor();
-        editor.set_editor('new-post');
+        editor.set_editor(subject);
     }
 }
 
@@ -523,7 +634,8 @@ function build_listners() {
     pageChangers.forEach(list => {
         list.forEach(element => {
             element.addEventListener('click', (event)=>{
-                change_page(event.currentTarget.getAttribute('data-page'));
+                const target = event.currentTarget;
+                change_page(target.getAttribute('data-page'), target.getAttribute('data-subject'));
             });
         });
     });
