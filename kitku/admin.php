@@ -1,14 +1,12 @@
 <?php
 
 require_once 'kitku.php';
-require_once 'res\htmlpurifier-4.13.0\library\HTMLPurifier.auto.php';
 
 class Admin extends Kitku {
 
 	public $tags =[] ;
 	public $categories = [];
 
-	private $purifier;
 	private $imagePath;
 
 	function __construct() {
@@ -330,9 +328,7 @@ class Admin extends Kitku {
 	}
 
 	private function handle_title($title) {
-		$this->set_purifier();
-		$title = trim($title);
-		return $this->purifier->purify($title);
+		return trim($title);
 	}
 
 	private function handle_tags($tags) {
@@ -342,11 +338,8 @@ class Admin extends Kitku {
 		return $tags;
 	}
 
-	private function handle_category($category) {
-		$this->set_purifier();
-
-		$category = trim($category);
-		return $this->purifier->purify($category);
+	private function handle_category($category) {		
+		return $category = trim($category);
 	}
 
 	private function handle_images($imageData, $postData, $urlTitle) {
@@ -381,17 +374,7 @@ class Admin extends Kitku {
 	}
 
 	private function handle_content($content) {
-		$this->set_purifier();
-		return $this->purifier->purify($content);
-	}
-
-	private function get_smallest_main_image($urlTitle) {
-		foreach($this->imageMaxSizes as $key => $value) {
-			$smallest = $key;
-			break;
-		}
-		$glob = glob($this->imagePath.$urlTitle.'/main_'.$smallest.'.*');
-		return !empty($glob[0]) ? $glob[0] : false;
+		return $content;
 	}
 
 	public function delete_files($target) {
@@ -488,13 +471,6 @@ class Admin extends Kitku {
 			return false;
 		}
 	}
-
-	// HELPER FUNCTIONS //
-	private function set_purifier() {
-		if (empty($this->purifier)) {
-			$this->purifier = new HTMLPurifier();
-		}
-	}
 }
 
 $kitku = new Admin();
@@ -570,11 +546,6 @@ include $kitku->home['installServer'].'res/header.php';
 			<img id="kitku-logo" class="navbar-logo" src="<?= $kitku->home['installUrl'].'res/images/logo.png' ?>" />
 
 			<div id="navbar-item-container">
-
-				<div data-page="home" class="navbar-item active">
-					<svg width="24" height="24" viewBox="0 0 1000 1000" xmlns="http://www.w3.org/2000/svg"><path d=" M 500 75C 514 75 528 82 540 94C 540 94 950 504 950 504C 960 514 960 519 950 529C 950 529 915 564 915 564C 905 574 895 574 885 564C 885 564 515 194 515 194C 505 184 495 184 485 194C 485 194 115 564 115 564C 105 574 95 574 85 564C 85 564 50 529 50 529C 40 519 40 514 50 504C 50 504 135 419 135 419C 145 409 150 399 150 389C 150 389 150 267 150 267C 150 267 150 154 150 154C 150 139 160 129 175 129C 175 129 300 129 300 129C 315 129 326 139 325 154C 325 154 325 229 325 229C 325 229 460 94 460 94C 472 82 486 75 500 75C 500 75 500 75 500 75M 500 236C 505 236 510 239 515 244C 515 244 835 564 835 564C 845 574 850 579 850 594C 850 594 850 879 850 879C 850 914 835 929 800 929C 800 929 600 929 600 929C 590 929 575 914 575 904C 575 904 575 754 575 754C 575 739 565 729 550 729C 550 729 450 729 450 729C 435 729 425 739 425 754C 425 754 425 904 425 904C 425 914 410 929 400 929C 400 929 200 929 200 929C 165 929 150 914 150 879C 150 879 150 594 150 594C 150 579 155 574 165 564C 165 564 485 244 485 244C 490 239 495 236 500 236C 500 236 500 236 500 236"/></svg>
-					<div class="navbar-content">home</div>
-				</div>
 				<div data-page="posts" data-children="new-post" class="navbar-item">
 					<svg width="24" height="24" viewBox="0 0 1000 1000" xmlns="http://www.w3.org/2000/svg"><path d=" M 725 88C 746 88 762 104 763 125C 763 125 763 188 763 188C 763 242 725 287 675 287C 675 287 641 287 641 287C 641 287 659 466 659 466C 690 473 717 489 734 513C 756 544 763 583 763 625C 762 646 746 662 725 663C 725 663 600 663 600 663C 600 663 563 663 563 663C 563 663 437 663 437 663C 437 663 400 663 400 663C 400 663 275 663 275 663C 254 662 238 646 238 625C 238 583 244 544 266 513C 283 489 310 473 341 466C 341 466 359 287 359 287C 359 287 325 287 325 287C 300 287 279 276 264 261C 249 246 238 225 238 200C 238 158 238 167 238 125C 238 104 254 88 275 88C 275 88 725 88 725 88M 563 710C 563 710 563 850 563 850C 563 856 561 862 559 867C 559 867 534 917 534 917C 527 929 514 937 500 937C 486 937 473 929 466 917C 466 917 441 867 441 867C 439 862 438 856 437 850C 437 850 437 710 437 710C 437 710 563 710 563 710"/></svg>
 					<div class="navbar-content">posts</div>
@@ -620,12 +591,7 @@ include $kitku->home['installServer'].'res/header.php';
 				</div>
 			</div>
 
-			<div data-page="home" class="main-content active">
-				<h1>The home page</h1>
-				<hr />
-			</div>
-
-			<div data-page="posts" class="main-content">
+			<div id="home" data-page="posts" class="main-content active">
 				<div class="page-title-container">
 					<h1 class="page-title"><?= $kitku->siteName ?>'s Posts</h1>
 					<div data-page="editor" data-subject="new-post" class="button new-button">New Post</div>

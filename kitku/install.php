@@ -218,7 +218,7 @@ if (!empty($_POST)) {
 			$defaultBlog = [
 				'title' => 'Blog',
 				'urlTitle' => 'blog',
-				'parent' => '',
+				'parent' => 'None',
 				'views' => '',
 				'content' => 'This is the default blog page. Your posts will be collected and displayed here',
 				'blogPage' => 1,

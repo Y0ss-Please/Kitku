@@ -92,7 +92,7 @@ class Kitku {
 		return true;
 	}
 
-	public function select($select, string $table, $where = null, $condition = null) {
+	public function select($select, string $table, $where = null, $condition = null, $ext = null) {
 		// SELECT using prepared statements
 		// single values may be a string. multiple values passed as an array.
 		// select('selection', 'table') 
@@ -111,6 +111,10 @@ class Kitku {
 			$executeParams = $getWheres[1];
 		} else {
 			$executeParams = [];
+		}
+
+		if ($ext) {
+			$command .= ' '.$ext;
 		}
 
 		try {
@@ -265,7 +269,7 @@ class Kitku {
 	}
 
 	/* == POST / PAGE FUNCTIONS == */
-	public function get_content_data($urlTitle) {
+	public function get_content_data($urlTitle, $parseImages = false, $size = 'max') {
 		$imgSrcs;
 		$images;
 		$sizes = $this->imageMaxSizes;
@@ -298,10 +302,43 @@ class Kitku {
 				}
 			}
 
-			return [$images, $imgSrcs[0], $content];
+			if ($parseImages) {
+				$i = 0;
+				foreach($images as $value) {
+					$content = str_replace($imgSrcs[0][$i], '<img src="'.$value[$size].'"', $content);
+					$i++;
+				}
+				return [null,null,$content];
+			} else {
+				return [$images, $imgSrcs[0], $content];
+			}
 		} else {
 			return [false, false, $content];
 		}
+	}
+
+	public function get_smallest_main_image($urlTitle, $urlFormat = false) {
+		foreach($this->imageMaxSizes as $key => $value) {
+			$smallest = $key;
+			break;
+		}
+
+		$glob = glob($this->home['server'].'images/'.$urlTitle.'/main_'.$smallest.'.*');
+
+		if ($urlFormat && !empty($glob[0])) {
+			$glob[0] = str_replace($this->home['server'], $this->home['url'], $glob[0]);
+		}
+
+		return !empty($glob[0]) ? $glob[0] : false;
+	}
+
+	public function get_main_image($urlTitle) {
+		$glob = glob($this->home['server'].'images/'.$urlTitle.'/main_max.*');
+		if ($glob) {
+			$path = str_replace($this->home['server'], $this->home['url'], $glob[0]);
+			return $path;
+		}
+		return false;
 	}
 
 	/* == USER FUNCTIONS == */
@@ -438,17 +475,6 @@ class Kitku {
 		}
 		return $randomString;
 	}  
-
-	public function get_client_ip() {
-		$ip = getenv('HTTP_CLIENT_IP')?:
-		getenv('HTTP_X_FORWARDED_FOR')?:
-		getenv('HTTP_X_FORWARDED')?:
-		getenv('HTTP_FORWARDED_FOR')?:
-		getenv('HTTP_FORWARDED')?:
-		getenv('REMOTE_ADDR');
-
-		return $ip;
-	}
 
 	public static function dump($val, $title = false) {
 		echo '<pre style="background-color: black; color: ivory; padding: 1rem; border-radius: 7px"><h2>'.($title ?: 'DUMP').':</h2>';
@@ -750,4 +776,49 @@ class KitkuImage {
 	}
 }
 
+class KitkuPage extends Kitku {
+	function __construct() {
+		parent::__construct();
+	}
+
+	function set_active_page(string $p) {
+		$data = $this->select('*', 'posts', 'urlTitle='.$p);
+		$this->p = 'post';
+		if (!$data) {
+			$data = $this->select('*', 'pages', 'urlTitle='.$p);
+			$this->p = 'page';
+		}
+
+		if (!$data) {
+			include "404.php";
+			exit();
+		}
+
+		foreach($data[0] as $key => $value) {
+			$this->$key = $value;
+		}
+	}
+
+	function get_nav_links() {
+		$navLinks = [];
+		$navItems = $this->select('title', 'pages', ['parent=None', 'parent='], ['OR'], 'ORDER BY id ASC');
+
+		foreach($navItems as $value) {
+			$navLinks[] = $value['title'];
+		}
+
+		return $navLinks;
+	}
+
+	function get_post_snippets(int $numberOfPosts) {
+		$posts = $this->select('*', 'posts', null, null, 'ORDER BY date DESC LIMIT '.$numberOfPosts);
+
+		$i = 0;
+		foreach($posts as $post) {
+			$posts[$i]['content'] = preg_replace('/<img src=".+?>/', '', $post['content']);
+			$i++;
+		}
+		return $posts;
+	}
+}
 ?>

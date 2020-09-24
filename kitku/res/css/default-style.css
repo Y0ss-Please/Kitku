@@ -33,10 +33,6 @@ body {
 	overflow: hidden;
 }
 
-a, a:visited{
-	color: var(--teal-3);
-}
-
 hr {
 	border: 2px solid var(--teal-1);
 	margin-bottom: 1rem;

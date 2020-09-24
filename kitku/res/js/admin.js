@@ -658,8 +658,5 @@ function build_listners() {
     });
 }
 
-function init() {
-    build_listners();
-}
-
-init();
+build_listners();
+change_page('posts');
