@@ -218,17 +218,17 @@ class Kitku {
 		if (is_string($error)) {
 			if (strpos($error, 'No such host') !== false) {
 				$this->dbError = 'noHost';
-			} else if (strpos($error, 'Access denied') !== false) {
+			} else if (strpos($error, 'denied') !== false) {
 				$this->dbError = 'badCred';
 			} else if (strpos($error, 'Unknown database') !== false) {
 				$this->dbError = 'noDB';
 			} else {
 				$this->dbError = 'other';
 			}
-			//echo($error); // For testing purposes. Will echo unparsed error to browser console!!!
+			echo($error); // For testing purposes. Will echo unparsed error to browser console!!!
 		} else {
 			$this->dbError = 'other';
-			//print_r($error); // For testing purposes. Will echo unparsed error to browser console!!!
+			print_r($error); // For testing purposes. Will echo unparsed error to browser console!!!
 		}
 		return $this->dbError;
 	}

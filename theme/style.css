@@ -13,11 +13,6 @@ body {
     height: 100vh;
 }
 
-a {
-    display: block;
-    text-decoration: none;
-}
-
 #banner {
     display: flex;
     justify-content: space-between;

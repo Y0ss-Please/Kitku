@@ -584,7 +584,7 @@ include $kitku->home['installServer'].'res/header.php';
 						<div id="main-modal-busy" class="surge"></div>
 						<div class="main-modal-content">
 							<h2 id="main-modal-header">Whoa there, partner!</h2>
-							<div id="main-modal-message">No need to get all uppity about it.</div>
+							<div id="main-modal-message">.</div>
 							<div id="main-modal-button" class="button">okay</div>
 						</div>
 					</div>
@@ -743,10 +743,14 @@ include $kitku->home['installServer'].'res/header.php';
 						</select>
 
 						<label class="posts-hide" for="editor-blog-page">Blog Page</label>
-						<input id="editor-blog-page" class="posts-hide" type="checkbox" name='editor-blog-page'>
+						<div class="posts-hide">
+							<input id="editor-blog-page" class="posts-hide" type="checkbox" name='editor-blog-page'>
+						</div>
 						
 						<label class="posts-hide" for="editor-show-in-menu">Show in Menu</label>
-						<input id="editor-show-in-menu" class="posts-hide" type="checkbox" name='editor-show-in-menu'>
+						<div class="posts-hide">
+							<input id="editor-show-in-menu" class="posts-hide" type="checkbox" name='editor-show-in-menu'>
+						</div>
 
 						<label for="editor-image">Main Image: </label>
 						<div id="main-image-preview-container">

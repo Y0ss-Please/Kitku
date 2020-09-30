@@ -119,35 +119,47 @@ if (!empty($_POST)) {
 		case 0:
 		// Page 0 formdata collects database login information.
 		// Check if user provided data allows for server connection.
+			$dbDatabase = (isset($_POST['database-database']) ? $_POST['database-database'] : false);
 			$dbInfo = [
 				'server' => $_POST['database-servername'], 
 				'username' => $_POST['database-username'], 
 				'password' => $_POST['database-password'],
-				'database' => 'kitku_'.$kitku->random_string(5)
+				'database' => ($dbDatabase ? $dbDatabase : 'kitku_'.$kitku->random_string(5))
 			];
-
-			if ($kitku->open_conn($dbInfo['server'], $dbInfo['username'], $dbInfo['password'])) {
-				$dbCreated = 0;
-				while($dbCreated !== true) {
-					if ($kitku->create_database($dbInfo['database'], false)) {
-						$dbCreated = true;
-						$kitku->set_dbInfo($dbInfo);
-						$kitku->installed = 1;
-						if ($kitku->set_config()) {
-							exit('success');
-						} else {
-							exit('serveErr');
-						}
-					} else {
-						$dbInfo['database'] = $kitku->random_string(5);
-						$dbCreated++;
+			if ($dbDatabase) {
+				if ($kitku->open_conn($dbInfo['server'], $dbInfo['username'], $dbInfo['password'], $dbDatabase)) {
+					$kitku->set_dbInfo($dbInfo);
+					$kitku->installed = 1;
+					if ($kitku->set_config()) {
+						exit('success');
 					}
-					if ($dbCreated > 10) {
-						exit('createDBFail');
-					}
+				} else {
+					exit('serveErr');
 				}
 			} else {
-				exit($kitku->dbError);
+				if ($kitku->open_conn($dbInfo['server'], $dbInfo['username'], $dbInfo['password'])) {
+					$dbCreated = 0;
+					while($dbCreated !== true) {
+						if ($kitku->create_database($dbInfo['database'], false)) {
+							$dbCreated = true;
+							$kitku->set_dbInfo($dbInfo);
+							$kitku->installed = 1;
+							if ($kitku->set_config()) {
+								exit('success');
+							} else {
+								exit('serveErr');
+							}
+						} else {
+							$dbInfo['database'] = $kitku->random_string(5);
+							$dbCreated++;
+						}
+						if ($dbCreated > 10) {
+							exit('createDBFail');
+						}
+					}
+				} else {
+					exit($kitku->dbError);
+				}
 			}
 			break;
 
@@ -260,11 +272,11 @@ if (!empty($_POST)) {
 
 ?>
 
-<script>
-	let activePage = <?= (isset($kitku->installed) ? $kitku->installed : 0); ?>;
-</script>
-
 <body>
+	<script>
+		let activePage = <?= (isset($kitku->installed) ? $kitku->installed : 0); ?>;
+	</script>
+	
 	<div id="installer">
 
 		<div class="content-container">
@@ -278,7 +290,7 @@ if (!empty($_POST)) {
 			<div class="content-body">
 
 				<div class="paginate-page  page0  hidden">
-					<p>If you need any help with setup, please click <a href="https://www.google.com">here.</a></p>
+					<p>If you need any help with setup, please click <a target="_blank" href="https://github.com/Y0ss-Please/Kitku/blob/master/README.md">here.</a></p>
 					<p>First, let's connect to your database.</p>
 
 					<form id="page0-form" method="post" onsubmit="return formSubmit(event, activePage)">
@@ -290,6 +302,8 @@ if (!empty($_POST)) {
 							<label for="database-password">Password:</label>
 							<input name="database-password" type="password">
 							<input type="submit" id="page0-form-submit" class="hidden">
+							<label for="database-database">Database:</label>
+							<input name="database-database" type="text" placeholder="Leave blank to auto generate a database.">
 						</div>
 					</form>
 
